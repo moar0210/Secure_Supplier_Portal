@@ -1,4 +1,10 @@
 <?php
+
+declare(strict_types=1);
+
+// Admin-only: suppliers should use "My Profile" instead
+$auth->requireRole('ADMIN');
+
 $stmt = $db->pdo()->prepare("
   SELECT id_supplier, supplier_name, short_name, email, homepage, is_inactive
   FROM suppliers
@@ -27,17 +33,18 @@ $rows = $stmt->fetchAll();
         </thead>
         <tbody>
             <?php foreach ($rows as $r): ?>
+                <?php $sid = (int)$r['id_supplier']; ?>
                 <tr>
-                    <td><?= htmlspecialchars($r["id_supplier"]) ?></td>
+                    <td><?= $sid ?></td>
                     <td>
-                        <a href="?page=supplier&id=<?= htmlspecialchars($r["id_supplier"]) ?>">
-                            <?= htmlspecialchars($r["supplier_name"]) ?>
+                        <a href="?page=supplier&id=<?= $sid ?>">
+                            <?= h((string)$r["supplier_name"]) ?>
                         </a>
                     </td>
-                    <td><?= htmlspecialchars($r["short_name"]) ?></td>
-                    <td><?= htmlspecialchars($r["email"]) ?></td>
-                    <td><?= htmlspecialchars($r["homepage"]) ?></td>
-                    <td><?= htmlspecialchars($r["is_inactive"]) ?></td>
+                    <td><?= h((string)$r["short_name"]) ?></td>
+                    <td><?= h((string)$r["email"]) ?></td>
+                    <td><?= h((string)$r["homepage"]) ?></td>
+                    <td><?= h((string)$r["is_inactive"]) ?></td>
                 </tr>
             <?php endforeach; ?>
         </tbody>

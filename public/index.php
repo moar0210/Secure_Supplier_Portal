@@ -1,41 +1,72 @@
 <?php
-$configPath = __DIR__ . "/../app/config/config.local.php";
+
+declare(strict_types=1);
+
+$root = dirname(__DIR__);
+
+// ---- Load config ----
+$configPath = $root . "/app/config/config.local.php";
 if (!file_exists($configPath)) {
-  http_response_code(500);
-  echo "Missing config.local.php. Copy app/config/config.example.php to app/config/config.local.php and fill in credentials.";
-  exit;
+    http_response_code(500);
+    echo "Missing config.local.php. Copy app/config/config.example.php to app/config/config.local.php and fill in credentials.";
+    exit;
 }
 $config = require $configPath;
-require __DIR__ . "/../app/lib/Database.php";
+
+// ---- Security bootstrap hook (enable later) ----
+// require $root . "/app/lib/SecurityBootstrap.php";
+
+// ---- DB ----
+require $root . "/app/lib/Database.php";
 
 $showDetailedErrors = true;
 
 try {
     $db = new Database($config);
+    $pdo = $db->pdo();
 } catch (Exception $e) {
     http_response_code(500);
     if ($showDetailedErrors) {
-        echo "DB error: " . htmlspecialchars($e->getMessage());
+        echo "DB error: " . htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     } else {
         echo "Database connection failed. Please try again later.";
     }
     exit;
 }
 
+// ---- Auth (available for nav + pages) ----
+require $root . "/app/lib/Auth.php";
+require $root . "/app/lib/Csrf.php";
+
+$auth = new Auth($pdo);
+
+// ---- Router ----
 $page = $_GET["page"] ?? "home";
 
 $routes = [
-    "home" => __DIR__ . "/../app/pages/home.php",
-    "dbtest" => __DIR__ . "/../app/pages/dbtest.php",
-    "suppliers" => __DIR__ . "/../app/pages/suppliers.php",
-    "supplier" => __DIR__ . "/../app/pages/supplier.php",
+    "home"            => $root . "/app/pages/home.php",
+    "dbtest"          => $root . "/app/pages/dbtest.php",
+    "suppliers"       => $root . "/app/pages/suppliers.php",
+    "supplier"        => $root . "/app/pages/supplier.php",
+
+    // Auth
+    "login"           => $root . "/app/pages/login.php",
+    "logout"          => $root . "/app/pages/logout.php",
+    "403"             => $root . "/app/pages/403.php",
+    "404"             => $root . "/app/pages/404.php",
+
+    // Admin-only
+    "admin"           => $root . "/app/pages/admin.php",
 ];
 
 if (!isset($routes[$page])) {
-    http_response_code(404);
-    $page = "home";
+    $page = "404";
 }
 
+function h(string $s): string
+{
+    return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
 ?>
 <!doctype html>
 <html>
@@ -80,21 +111,57 @@ if (!isset($routes[$page])) {
         th {
             background: #f5f5f5;
         }
+
+        .nav-right {
+            float: right;
+        }
+
+        .nav-right a {
+            margin-right: 0;
+            margin-left: 12px;
+        }
     </style>
 </head>
 
 <body>
     <header>
         <strong>Supplier Portal</strong>
+
         <nav style="display:inline-block; margin-left:16px;">
             <a href="?page=home">Home</a>
             <a href="?page=dbtest">DB Test</a>
-            <a href="?page=suppliers">Suppliers</a>
+            <?php if ($auth->hasRole('ADMIN')): ?>
+                <a href="?page=suppliers">Suppliers</a>
+            <?php elseif ($auth->hasRole('SUPPLIER')): ?>
+                <?php $sid = $auth->supplierId(); ?>
+                <?php if ($sid !== null): ?>
+                    <a href="?page=supplier&id=<?= (int)$sid ?>">My Profile</a>
+                <?php else: ?>
+                    <span style="opacity:.8;">My Profile (unlinked)</span>
+                <?php endif; ?>
+            <?php endif; ?>
+
+            <?php if ($auth->hasRole('ADMIN')): ?>
+                <a href="?page=admin">Admin</a>
+            <?php endif; ?>
         </nav>
+
+        <nav class="nav-right">
+            <?php if ($auth->isLoggedIn()): ?>
+                <span>Logged in as <strong><?php echo h((string)$auth->username()); ?></strong></span>
+                <a href="?page=logout">Logout</a>
+            <?php else: ?>
+                <a href="?page=login">Login</a>
+            <?php endif; ?>
+        </nav>
+
+        <div style="clear:both;"></div>
     </header>
 
     <main>
-        <?php require $routes[$page]; ?>
+        <?php
+        require $routes[$page];
+        ?>
     </main>
 </body>
 
