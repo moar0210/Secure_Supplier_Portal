@@ -12,12 +12,12 @@ if (!file_exists($configPath)) {
     exit;
 }
 $config = require $configPath;
-
-// ---- Security bootstrap hook (enable later) ----
-// require $root . "/app/lib/SecurityBootstrap.php";
-
+require $root . "/app/lib/SecurityBootstrap.php";
 // ---- DB ----
 require $root . "/app/lib/Database.php";
+
+require $root . "/app/lib/AdsService.php";
+$adsService = new AdsService($pdo);
 
 $showDetailedErrors = true;
 
@@ -57,6 +57,22 @@ $routes = [
 
     // Admin-only
     "admin"           => $root . "/app/pages/admin.php",
+    "security_check"  => $root . "/app/pages/security_check.php",
+
+    // Supplier Ads
+    "ads_list"        => $root . "/app/pages/ads_list.php",
+    "ad_create"       => $root . "/app/pages/ad_create.php",
+    "ad_edit"         => $root . "/app/pages/ad_edit.php",
+    "ad_toggle"       => $root . "/app/pages/ad_toggle.php",
+
+    // Admin Ads
+    "admin_ads_queue" => $root . "/app/pages/admin_ads_queue.php",
+    "admin_ad_review" => $root . "/app/pages/admin_ad_review.php",
+
+    // Admin Categories (optional)
+    "admin_categories"    => $root . "/app/pages/admin_categories.php",
+    "admin_category_edit" => $root . "/app/pages/admin_category_edit.php",
+
 ];
 
 if (!isset($routes[$page])) {
