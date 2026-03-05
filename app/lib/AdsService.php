@@ -16,9 +16,9 @@ final class AdsService
         $this->pdo = $pdo;
     }
 
-    /* -----------------------------
+    /* =========================================================
        Supplier-facing operations
-    ------------------------------*/
+       ========================================================= */
 
     public function listForSupplier(int $supplierId): array
     {
@@ -76,20 +76,26 @@ final class AdsService
     }
 
     /**
-     * $data keys (suggested):
-     * - title (string, required)
-     * - description (string, required)
-     * - category_id (int|null)
-     * - price_text (string|null)
-     * - valid_from (YYYY-MM-DD|null)
-     * - valid_to (YYYY-MM-DD|null)
-     * - save_as_draft (bool) optional; if true => DRAFT else PENDING
+     * Create ad (default: DRAFT). You can submit later using submitForSupplier(),
+     * or submit immediately by sending submit_for_approval=1 in $data.
+     *
+     * Expected $data keys:
+     * - title (required)
+     * - description (required)
+     * - category_id (optional)
+     * - price_text (optional)
+     * - valid_from (optional YYYY-MM-DD)
+     * - valid_to (optional YYYY-MM-DD)
+     * - submit_for_approval (optional truthy -> initial status PENDING)
      */
     public function createForSupplier(int $supplierId, array $data, int $actorUserId): int
     {
         $clean = $this->validateAndNormalizeAdData($data);
 
-        $status = !empty($data['save_as_draft']) ? self::STATUS_DRAFT : self::STATUS_PENDING;
+        $submitNow = $this->shouldSubmit($data);
+        $status = $submitNow ? self::STATUS_PENDING : self::STATUS_DRAFT;
+
+        // Only APPROVED ads are allowed to be active
         $isActive = 0;
 
         $this->pdo->beginTransaction();
@@ -124,10 +130,53 @@ final class AdsService
     }
 
     /**
-     * Editing rules:
-     * - Supplier can edit own ad
-     * - If ad is APPROVED and supplier edits it, it goes back to PENDING (recommended baseline)
-     * - Supplier cannot directly set APPROVED/REJECTED
+     * Submit/resubmit:
+     * - DRAFT -> PENDING
+     * - REJECTED -> PENDING
+     */
+    public function submitForSupplier(int $adId, int $supplierId, int $actorUserId): void
+    {
+        $current = $this->getForSupplier($adId, $supplierId);
+        if (!$current) {
+            throw new \RuntimeException('Ad not found.');
+        }
+
+        $oldStatus = (string)$current['status'];
+        if (!in_array($oldStatus, [self::STATUS_DRAFT, self::STATUS_REJECTED], true)) {
+            throw new \RuntimeException('Only DRAFT or REJECTED ads can be submitted.');
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare("
+                UPDATE ads
+                SET status = :st,
+                    rejection_reason = NULL,
+                    is_active = 0,
+                    updated_at = NOW()
+                WHERE id = :id AND supplier_id = :sid
+            ");
+            $stmt->execute([
+                ':st'  => self::STATUS_PENDING,
+                ':id'  => $adId,
+                ':sid' => $supplierId,
+            ]);
+
+            $this->insertStatusHistory($adId, $oldStatus, self::STATUS_PENDING, $actorUserId, null);
+
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * Update rules (Part 3):
+     * - PENDING ads are locked (cannot be edited) to keep workflow clear.
+     * - APPROVED edit -> PENDING + is_active=0 (re-review needed).
+     * - REJECTED edit -> DRAFT (clears reason). Can submit after.
+     * - DRAFT edit -> DRAFT (unless submit_for_approval=1, then goes PENDING).
      */
     public function updateForSupplier(int $adId, int $supplierId, array $data, int $actorUserId): void
     {
@@ -136,37 +185,70 @@ final class AdsService
             throw new \RuntimeException('Ad not found.');
         }
 
-        $clean = $this->validateAndNormalizeAdData($data);
+        $oldStatus = (string)$current['status'];
 
-        $newStatus = (string)$current['status'];
-        $newRejectReason = $current['rejection_reason'];
-
-        if ($newStatus === self::STATUS_APPROVED) {
-            $newStatus = self::STATUS_PENDING;
-            $newRejectReason = null;
+        // Lock pending ads for clarity + auditability
+        if ($oldStatus === self::STATUS_PENDING) {
+            throw new \RuntimeException('Pending ads cannot be edited. Wait for review.');
         }
 
-        if ($newStatus === self::STATUS_REJECTED) {
+        $clean = $this->validateAndNormalizeAdData($data);
+        $submitNow = $this->shouldSubmit($data);
+
+        $newStatus = $oldStatus;
+        $newRejectReason = $current['rejection_reason'];
+        $forceInactive = false;
+
+        if ($oldStatus === self::STATUS_APPROVED) {
             $newStatus = self::STATUS_PENDING;
             $newRejectReason = null;
+            $forceInactive = true;
+        } elseif ($oldStatus === self::STATUS_REJECTED) {
+            $newStatus = $submitNow ? self::STATUS_PENDING : self::STATUS_DRAFT;
+            $newRejectReason = null;
+            $forceInactive = true; // safe default: keep inactive until re-approved
+        } elseif ($oldStatus === self::STATUS_DRAFT) {
+            $newStatus = $submitNow ? self::STATUS_PENDING : self::STATUS_DRAFT;
+            if ($newStatus === self::STATUS_PENDING) {
+                $forceInactive = true;
+            }
         }
 
         $this->pdo->beginTransaction();
         try {
-            $stmt = $this->pdo->prepare("
-                UPDATE ads
-                SET
-                    category_id = :cid,
-                    title = :t,
-                    description = :d,
-                    price_text = :p,
-                    valid_from = :vf,
-                    valid_to = :vt,
-                    status = :st,
-                    rejection_reason = :rr,
-                    updated_at = NOW()
-                WHERE id = :id AND supplier_id = :sid
-            ");
+            if ($forceInactive) {
+                $stmt = $this->pdo->prepare("
+                    UPDATE ads
+                    SET
+                        category_id = :cid,
+                        title = :t,
+                        description = :d,
+                        price_text = :p,
+                        valid_from = :vf,
+                        valid_to = :vt,
+                        status = :st,
+                        rejection_reason = :rr,
+                        is_active = 0,
+                        updated_at = NOW()
+                    WHERE id = :id AND supplier_id = :sid
+                ");
+            } else {
+                $stmt = $this->pdo->prepare("
+                    UPDATE ads
+                    SET
+                        category_id = :cid,
+                        title = :t,
+                        description = :d,
+                        price_text = :p,
+                        valid_from = :vf,
+                        valid_to = :vt,
+                        status = :st,
+                        rejection_reason = :rr,
+                        updated_at = NOW()
+                    WHERE id = :id AND supplier_id = :sid
+                ");
+            }
+
             $stmt->execute([
                 ':cid' => $clean['category_id'],
                 ':t'   => $clean['title'],
@@ -180,8 +262,8 @@ final class AdsService
                 ':sid' => $supplierId,
             ]);
 
-            if ((string)$current['status'] !== $newStatus) {
-                $this->insertStatusHistory($adId, (string)$current['status'], $newStatus, $actorUserId, null);
+            if ($oldStatus !== $newStatus) {
+                $this->insertStatusHistory($adId, $oldStatus, $newStatus, $actorUserId, null);
             }
 
             $this->pdo->commit();
@@ -191,11 +273,18 @@ final class AdsService
         }
     }
 
+    /**
+     * Supplier can only activate/deactivate APPROVED ads.
+     */
     public function toggleActiveForSupplier(int $adId, int $supplierId, bool $active, int $actorUserId): void
     {
         $current = $this->getForSupplier($adId, $supplierId);
         if (!$current) {
             throw new \RuntimeException('Ad not found.');
+        }
+
+        if ((string)$current['status'] !== self::STATUS_APPROVED) {
+            throw new \RuntimeException('Only APPROVED ads can be activated/deactivated.');
         }
 
         $stmt = $this->pdo->prepare("
@@ -204,15 +293,15 @@ final class AdsService
             WHERE id = :id AND supplier_id = :sid
         ");
         $stmt->execute([
-            ':ia' => $active ? 1 : 0,
-            ':id' => $adId,
+            ':ia'  => $active ? 1 : 0,
+            ':id'  => $adId,
             ':sid' => $supplierId,
         ]);
     }
 
-    /* -----------------------------
+    /* =========================================================
        Admin-facing operations
-    ------------------------------*/
+       ========================================================= */
 
     public function adminQueue(?string $status = self::STATUS_PENDING): array
     {
@@ -283,6 +372,11 @@ final class AdsService
         return $row ?: null;
     }
 
+    /**
+     * Admin approves/rejects ONLY PENDING.
+     * - approve => APPROVED + is_active=1 + rejection_reason=NULL
+     * - reject  => REJECTED + is_active=0 + rejection_reason=required
+     */
     public function adminDecision(int $adId, bool $approve, ?string $reason, int $actorUserId): void
     {
         $current = $this->adminGet($adId);
@@ -295,23 +389,29 @@ final class AdsService
             throw new \RuntimeException('Only PENDING ads can be approved/rejected.');
         }
 
-        $newStatus = $approve ? self::STATUS_APPROVED : self::STATUS_REJECTED;
+        $newStatus  = $approve ? self::STATUS_APPROVED : self::STATUS_REJECTED;
         $reasonNorm = $approve ? null : $this->normalizeReason($reason);
 
         if (!$approve && $reasonNorm === null) {
             throw new \InvalidArgumentException('Rejection reason is required.');
         }
 
+        $isActive = $approve ? 1 : 0;
+
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare("
                 UPDATE ads
-                SET status = :st, rejection_reason = :rr, updated_at = NOW()
+                SET status = :st,
+                    rejection_reason = :rr,
+                    is_active = :ia,
+                    updated_at = NOW()
                 WHERE id = :id
             ");
             $stmt->execute([
                 ':st' => $newStatus,
-                ':rr' => $reasonNorm,
+                ':rr' => $reasonNorm,   // NULL on approve
+                ':ia' => $isActive,
                 ':id' => $adId,
             ]);
 
@@ -324,9 +424,27 @@ final class AdsService
         }
     }
 
-    /* -----------------------------
+    public function adminHistory(int $adId): array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT
+                h.old_status,
+                h.new_status,
+                h.reason,
+                h.changed_at,
+                u.username
+            FROM ad_status_history h
+            LEFT JOIN portal_users u ON u.id = h.changed_by_user_id
+            WHERE h.ad_id = :aid
+            ORDER BY h.changed_at DESC, h.id DESC
+        ");
+        $stmt->execute([':aid' => $adId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /* =========================================================
        Categories
-    ------------------------------*/
+       ========================================================= */
 
     public function listCategories(): array
     {
@@ -368,9 +486,21 @@ final class AdsService
         $stmt->execute([':id' => $categoryId]);
     }
 
-    /* -----------------------------
+    /* =========================================================
        Internals
-    ------------------------------*/
+       ========================================================= */
+
+    private function shouldSubmit(array $data): bool
+    {
+        // Supports multiple UI styles:
+        // - <button name="action" value="submit">
+        // - hidden input submit_for_approval=1
+        $action = strtolower(trim((string)($data['action'] ?? '')));
+        if ($action === 'submit') {
+            return true;
+        }
+        return !empty($data['submit_for_approval']);
+    }
 
     private function validateAndNormalizeAdData(array $data): array
     {
@@ -408,6 +538,9 @@ final class AdsService
             $price = null;
         }
 
+        // Avoid FK exceptions: verify category exists when provided
+        $this->assertCategoryExists($categoryId);
+
         $validFrom = $this->normalizeDate($data['valid_from'] ?? null);
         $validTo   = $this->normalizeDate($data['valid_to'] ?? null);
 
@@ -425,14 +558,33 @@ final class AdsService
         ];
     }
 
+    private function assertCategoryExists(?int $categoryId): void
+    {
+        if ($categoryId === null) {
+            return;
+        }
+
+        $stmt = $this->pdo->prepare("SELECT 1 FROM ad_categories WHERE id = :id");
+        $stmt->execute([':id' => $categoryId]);
+        if (!$stmt->fetchColumn()) {
+            throw new \InvalidArgumentException('Selected category does not exist.');
+        }
+    }
+
     private function normalizeDate(mixed $v): ?string
     {
-        if ($v === null) return null;
-        $s = trim((string)$v);
-        if ($s === '') return null;
+        if ($v === null) {
+            return null;
+        }
 
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) {
-            throw new \InvalidArgumentException('Date must be YYYY-MM-DD.');
+        $s = trim((string)$v);
+        if ($s === '') {
+            return null;
+        }
+
+        $dt = \DateTime::createFromFormat('Y-m-d', $s);
+        if (!$dt || $dt->format('Y-m-d') !== $s) {
+            throw new \InvalidArgumentException('Date must be a valid YYYY-MM-DD.');
         }
 
         return $s;
@@ -440,9 +592,13 @@ final class AdsService
 
     private function normalizeReason(?string $reason): ?string
     {
-        if ($reason === null) return null;
+        if ($reason === null) {
+            return null;
+        }
         $r = trim($reason);
-        if ($r === '') return null;
+        if ($r === '') {
+            return null;
+        }
         if (mb_strlen($r) > 500) {
             throw new \InvalidArgumentException('Reason too long (max 500 chars).');
         }
@@ -451,6 +607,10 @@ final class AdsService
 
     private function insertStatusHistory(int $adId, ?string $old, string $new, int $actorUserId, ?string $reason): void
     {
+        if ($actorUserId < 1) {
+            throw new \InvalidArgumentException('actorUserId is invalid.');
+        }
+
         $stmt = $this->pdo->prepare("
             INSERT INTO ad_status_history (ad_id, old_status, new_status, reason, changed_by_user_id, changed_at)
             VALUES (:aid, :old, :new, :r, :uid, NOW())

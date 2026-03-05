@@ -12,12 +12,12 @@ if (!file_exists($configPath)) {
     exit;
 }
 $config = require $configPath;
+
+// ---- Security bootstrap (starts session + headers + idle timeout) ----
 require $root . "/app/lib/SecurityBootstrap.php";
+
 // ---- DB ----
 require $root . "/app/lib/Database.php";
-
-require $root . "/app/lib/AdsService.php";
-$adsService = new AdsService($pdo);
 
 $showDetailedErrors = true;
 
@@ -34,11 +34,15 @@ try {
     exit;
 }
 
-// ---- Auth (available for nav + pages) ----
+// ---- Auth + CSRF ----
 require $root . "/app/lib/Auth.php";
 require $root . "/app/lib/Csrf.php";
 
 $auth = new Auth($pdo);
+
+// ---- Services ----
+require $root . "/app/lib/AdsService.php";
+$adsService = new AdsService($pdo);
 
 // ---- Router ----
 $page = $_GET["page"] ?? "home";
@@ -59,29 +63,28 @@ $routes = [
     "admin"           => $root . "/app/pages/admin.php",
     "security_check"  => $root . "/app/pages/security_check.php",
 
-    // Supplier Ads
+    // Supplier Ads (Daniel pages)
     "ads_list"        => $root . "/app/pages/ads_list.php",
     "ad_create"       => $root . "/app/pages/ad_create.php",
     "ad_edit"         => $root . "/app/pages/ad_edit.php",
     "ad_toggle"       => $root . "/app/pages/ad_toggle.php",
 
-    // Admin Ads
+    // Admin Ads (Daniel pages)
     "admin_ads_queue" => $root . "/app/pages/admin_ads_queue.php",
     "admin_ad_review" => $root . "/app/pages/admin_ad_review.php",
 
-    // Admin Categories (optional)
+    // Admin Categories (optional Daniel pages)
     "admin_categories"    => $root . "/app/pages/admin_categories.php",
     "admin_category_edit" => $root . "/app/pages/admin_category_edit.php",
-
 ];
 
-if (!isset($routes[$page])) {
+if (!isset($routes[$page]) || !file_exists($routes[$page])) {
     $page = "404";
 }
 
-function h(string $s): string
+function h(mixed $v): string
 {
-    return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    return htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 ?>
 <!doctype html>
@@ -146,25 +149,29 @@ function h(string $s): string
         <nav style="display:inline-block; margin-left:16px;">
             <a href="?page=home">Home</a>
             <a href="?page=dbtest">DB Test</a>
+
             <?php if ($auth->hasRole('ADMIN')): ?>
                 <a href="?page=suppliers">Suppliers</a>
+                <a href="?page=admin_ads_queue">Ads Queue</a>
+                <a href="?page=admin_categories">Categories</a>
+                <a href="?page=security_check">Security Check</a>
+                <a href="?page=admin">Admin</a>
+
             <?php elseif ($auth->hasRole('SUPPLIER')): ?>
                 <?php $sid = $auth->supplierId(); ?>
                 <?php if ($sid !== null): ?>
                     <a href="?page=supplier&id=<?= (int)$sid ?>">My Profile</a>
+                    <a href="?page=ads_list">My Ads</a>
                 <?php else: ?>
                     <span style="opacity:.8;">My Profile (unlinked)</span>
+                    <span style="opacity:.8;">My Ads (unlinked)</span>
                 <?php endif; ?>
-            <?php endif; ?>
-
-            <?php if ($auth->hasRole('ADMIN')): ?>
-                <a href="?page=admin">Admin</a>
             <?php endif; ?>
         </nav>
 
         <nav class="nav-right">
             <?php if ($auth->isLoggedIn()): ?>
-                <span>Logged in as <strong><?php echo h((string)$auth->username()); ?></strong></span>
+                <span>Logged in as <strong><?= h($auth->username()); ?></strong></span>
                 <a href="?page=logout">Logout</a>
             <?php else: ?>
                 <a href="?page=login">Login</a>
@@ -175,9 +182,7 @@ function h(string $s): string
     </header>
 
     <main>
-        <?php
-        require $routes[$page];
-        ?>
+        <?php require $routes[$page]; ?>
     </main>
 </body>
 
