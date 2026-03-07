@@ -18,7 +18,6 @@ require $root . "/app/lib/SecurityBootstrap.php";
 
 // ---- DB ----
 require $root . "/app/lib/Database.php";
-
 $showDetailedErrors = true;
 
 try {
@@ -63,28 +62,29 @@ $routes = [
     "admin"           => $root . "/app/pages/admin.php",
     "security_check"  => $root . "/app/pages/security_check.php",
 
-    // Supplier Ads (Daniel pages)
+    // Supplier Ads 
     "ads_list"        => $root . "/app/pages/ads_list.php",
     "ad_create"       => $root . "/app/pages/ad_create.php",
     "ad_edit"         => $root . "/app/pages/ad_edit.php",
     "ad_toggle"       => $root . "/app/pages/ad_toggle.php",
 
-    // Admin Ads (Daniel pages)
+    // Admin Ads 
     "admin_ads_queue" => $root . "/app/pages/admin_ads_queue.php",
     "admin_ad_review" => $root . "/app/pages/admin_ad_review.php",
 
-    // Admin Categories (optional Daniel pages)
+    // Admin Categories 
     "admin_categories"    => $root . "/app/pages/admin_categories.php",
     "admin_category_edit" => $root . "/app/pages/admin_category_edit.php",
 ];
 
+// fallback + avoid fatal if file missing
 if (!isset($routes[$page]) || !file_exists($routes[$page])) {
     $page = "404";
 }
 
-function h(mixed $v): string
+function h(string $s): string
 {
-    return htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 ?>
 <!doctype html>
@@ -156,7 +156,6 @@ function h(mixed $v): string
                 <a href="?page=admin_categories">Categories</a>
                 <a href="?page=security_check">Security Check</a>
                 <a href="?page=admin">Admin</a>
-
             <?php elseif ($auth->hasRole('SUPPLIER')): ?>
                 <?php $sid = $auth->supplierId(); ?>
                 <?php if ($sid !== null): ?>
@@ -171,7 +170,7 @@ function h(mixed $v): string
 
         <nav class="nav-right">
             <?php if ($auth->isLoggedIn()): ?>
-                <span>Logged in as <strong><?= h($auth->username()); ?></strong></span>
+                <span>Logged in as <strong><?php echo h((string)$auth->username()); ?></strong></span>
                 <a href="?page=logout">Logout</a>
             <?php else: ?>
                 <a href="?page=login">Login</a>
