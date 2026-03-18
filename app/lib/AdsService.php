@@ -138,12 +138,12 @@ final class AdsService
     {
         $current = $this->getForSupplier($adId, $supplierId);
         if (!$current) {
-            throw new \RuntimeException('Ad not found.');
+            throw new UserFacingException('Ad not found.');
         }
 
         $oldStatus = (string)$current['status'];
         if (!in_array($oldStatus, [self::STATUS_DRAFT, self::STATUS_REJECTED], true)) {
-            throw new \RuntimeException('Only DRAFT or REJECTED ads can be submitted.');
+            throw new UserFacingException('Only DRAFT or REJECTED ads can be submitted.');
         }
 
         $this->pdo->beginTransaction();
@@ -182,14 +182,14 @@ final class AdsService
     {
         $current = $this->getForSupplier($adId, $supplierId);
         if (!$current) {
-            throw new \RuntimeException('Ad not found.');
+            throw new UserFacingException('Ad not found.');
         }
 
         $oldStatus = (string)$current['status'];
 
         // Lock pending ads for clarity + auditability
         if ($oldStatus === self::STATUS_PENDING) {
-            throw new \RuntimeException('Pending ads cannot be edited. Wait for review.');
+            throw new UserFacingException('Pending ads cannot be edited. Wait for review.');
         }
 
         $clean = $this->validateAndNormalizeAdData($data);
@@ -276,15 +276,15 @@ final class AdsService
     /**
      * Supplier can only activate/deactivate APPROVED ads.
      */
-    public function toggleActiveForSupplier(int $adId, int $supplierId, bool $active, int $actorUserId): void
+    public function toggleActiveForSupplier(int $adId, int $supplierId, bool $active): void
     {
         $current = $this->getForSupplier($adId, $supplierId);
         if (!$current) {
-            throw new \RuntimeException('Ad not found.');
+            throw new UserFacingException('Ad not found.');
         }
 
         if ((string)$current['status'] !== self::STATUS_APPROVED) {
-            throw new \RuntimeException('Only APPROVED ads can be activated/deactivated.');
+            throw new UserFacingException('Only APPROVED ads can be activated/deactivated.');
         }
 
         $stmt = $this->pdo->prepare("
@@ -299,6 +299,38 @@ final class AdsService
         ]);
     }
 
+    public function deleteForSupplier(int $adId, int $supplierId): void
+    {
+        $current = $this->getForSupplier($adId, $supplierId);
+        if (!$current) {
+            throw new UserFacingException('Ad not found.');
+        }
+
+        $status = strtoupper((string)$current['status']);
+
+        if ($status === self::STATUS_PENDING) {
+            throw new UserFacingException('Pending ads cannot be deleted while they are under review.');
+        }
+
+        if (!in_array($status, [self::STATUS_DRAFT, self::STATUS_REJECTED], true)) {
+            throw new UserFacingException('Only DRAFT or REJECTED ads can be deleted.');
+        }
+
+        $stmt = $this->pdo->prepare("
+            DELETE FROM ads
+            WHERE id = :id
+              AND supplier_id = :sid
+        ");
+        $stmt->execute([
+            ':id' => $adId,
+            ':sid' => $supplierId,
+        ]);
+
+        if ($stmt->rowCount() !== 1) {
+            throw new RuntimeException('Unable to delete the advertisement.');
+        }
+    }
+
     /* =========================================================
        Admin-facing operations
        ========================================================= */
@@ -308,7 +340,7 @@ final class AdsService
         $status = $status === null ? null : strtoupper(trim($status));
 
         if ($status !== null && !in_array($status, [self::STATUS_PENDING, self::STATUS_APPROVED, self::STATUS_REJECTED, self::STATUS_DRAFT], true)) {
-            throw new \InvalidArgumentException('Invalid status filter.');
+            throw new UserFacingException('Invalid status filter.');
         }
 
         if ($status === null) {
@@ -374,29 +406,30 @@ final class AdsService
 
     /**
      * Admin approves/rejects ONLY PENDING.
-     * - approve => APPROVED + is_active=1 + rejection_reason=NULL
+     * - approve => APPROVED + is_active=0 + rejection_reason=NULL
      * - reject  => REJECTED + is_active=0 + rejection_reason=required
      */
     public function adminDecision(int $adId, bool $approve, ?string $reason, int $actorUserId): void
     {
         $current = $this->adminGet($adId);
         if (!$current) {
-            throw new \RuntimeException('Ad not found.');
+            throw new UserFacingException('Ad not found.');
         }
 
         $oldStatus = (string)$current['status'];
         if ($oldStatus !== self::STATUS_PENDING) {
-            throw new \RuntimeException('Only PENDING ads can be approved/rejected.');
+            throw new UserFacingException('Only PENDING ads can be approved/rejected.');
         }
 
         $newStatus  = $approve ? self::STATUS_APPROVED : self::STATUS_REJECTED;
         $reasonNorm = $approve ? null : $this->normalizeReason($reason);
 
         if (!$approve && $reasonNorm === null) {
-            throw new \InvalidArgumentException('Rejection reason is required.');
+            throw new UserFacingException('Rejection reason is required.');
         }
 
-        $isActive = $approve ? 1 : 0;
+        // Approval and activation are separate steps: supplier decides when an approved ad goes live.
+        $isActive = 0;
 
         $this->pdo->beginTransaction();
         try {
@@ -460,7 +493,11 @@ final class AdsService
     {
         $name = trim($name);
         if ($name === '' || mb_strlen($name) > 100) {
-            throw new \InvalidArgumentException('Category name is invalid.');
+            throw new UserFacingException('Category name is invalid.');
+        }
+
+        if ($this->categoryNameExists($name)) {
+            throw new UserFacingException('A category with that name already exists.');
         }
 
         $stmt = $this->pdo->prepare("INSERT INTO ad_categories (name) VALUES (:n)");
@@ -473,7 +510,13 @@ final class AdsService
     {
         $name = trim($name);
         if ($name === '' || mb_strlen($name) > 100) {
-            throw new \InvalidArgumentException('Category name is invalid.');
+            throw new UserFacingException('Category name is invalid.');
+        }
+
+        $this->requireCategory($categoryId);
+
+        if ($this->categoryNameExists($name, $categoryId)) {
+            throw new UserFacingException('A category with that name already exists.');
         }
 
         $stmt = $this->pdo->prepare("UPDATE ad_categories SET name = :n WHERE id = :id");
@@ -482,6 +525,12 @@ final class AdsService
 
     public function deleteCategory(int $categoryId): void
     {
+        $this->requireCategory($categoryId);
+
+        if ($this->countAdsForCategory($categoryId) > 0) {
+            throw new UserFacingException('Cannot delete a category that is still used by advertisements.');
+        }
+
         $stmt = $this->pdo->prepare("DELETE FROM ad_categories WHERE id = :id");
         $stmt->execute([':id' => $categoryId]);
     }
@@ -517,22 +566,22 @@ final class AdsService
                 if (is_string($categoryId) && ctype_digit($categoryId)) {
                     $categoryId = (int)$categoryId;
                 } else {
-                    throw new \InvalidArgumentException('Category id is invalid.');
+                    throw new UserFacingException('Category id is invalid.');
                 }
             }
             if ($categoryId < 1) {
-                throw new \InvalidArgumentException('Category id is invalid.');
+                throw new UserFacingException('Category id is invalid.');
             }
         }
 
         if ($title === '' || mb_strlen($title) > 200) {
-            throw new \InvalidArgumentException('Title is required (max 200 chars).');
+            throw new UserFacingException('Title is required (max 200 chars).');
         }
         if ($desc === '' || mb_strlen($desc) > 5000) {
-            throw new \InvalidArgumentException('Description is required (max 5000 chars).');
+            throw new UserFacingException('Description is required (max 5000 chars).');
         }
         if ($price !== null && $price !== '' && mb_strlen($price) > 200) {
-            throw new \InvalidArgumentException('Price text too long (max 200 chars).');
+            throw new UserFacingException('Price text too long (max 200 chars).');
         }
         if ($price === '') {
             $price = null;
@@ -545,7 +594,7 @@ final class AdsService
         $validTo   = $this->normalizeDate($data['valid_to'] ?? null);
 
         if ($validFrom !== null && $validTo !== null && $validTo < $validFrom) {
-            throw new \InvalidArgumentException('valid_to must be on or after valid_from.');
+            throw new UserFacingException('valid_to must be on or after valid_from.');
         }
 
         return [
@@ -564,11 +613,7 @@ final class AdsService
             return;
         }
 
-        $stmt = $this->pdo->prepare("SELECT 1 FROM ad_categories WHERE id = :id");
-        $stmt->execute([':id' => $categoryId]);
-        if (!$stmt->fetchColumn()) {
-            throw new \InvalidArgumentException('Selected category does not exist.');
-        }
+        $this->requireCategory($categoryId, 'Selected category does not exist.');
     }
 
     private function normalizeDate(mixed $v): ?string
@@ -584,7 +629,7 @@ final class AdsService
 
         $dt = \DateTime::createFromFormat('Y-m-d', $s);
         if (!$dt || $dt->format('Y-m-d') !== $s) {
-            throw new \InvalidArgumentException('Date must be a valid YYYY-MM-DD.');
+            throw new UserFacingException('Date must be a valid YYYY-MM-DD.');
         }
 
         return $s;
@@ -600,7 +645,7 @@ final class AdsService
             return null;
         }
         if (mb_strlen($r) > 500) {
-            throw new \InvalidArgumentException('Reason too long (max 500 chars).');
+            throw new UserFacingException('Reason too long (max 500 chars).');
         }
         return $r;
     }
@@ -608,7 +653,7 @@ final class AdsService
     private function insertStatusHistory(int $adId, ?string $old, string $new, int $actorUserId, ?string $reason): void
     {
         if ($actorUserId < 1) {
-            throw new \InvalidArgumentException('actorUserId is invalid.');
+            throw new \RuntimeException('Invalid actor user id.');
         }
 
         $stmt = $this->pdo->prepare("
@@ -622,5 +667,47 @@ final class AdsService
             ':r'   => $reason,
             ':uid' => $actorUserId,
         ]);
+    }
+
+    private function requireCategory(int $categoryId, string $message = 'Category not found.'): void
+    {
+        $stmt = $this->pdo->prepare("SELECT 1 FROM ad_categories WHERE id = :id");
+        $stmt->execute([':id' => $categoryId]);
+
+        if (!$stmt->fetchColumn()) {
+            throw new UserFacingException($message);
+        }
+    }
+
+    private function categoryNameExists(string $name, ?int $excludeCategoryId = null): bool
+    {
+        if ($excludeCategoryId === null) {
+            $stmt = $this->pdo->prepare("SELECT 1 FROM ad_categories WHERE name = :name LIMIT 1");
+            $stmt->execute([':name' => $name]);
+
+            return (bool)$stmt->fetchColumn();
+        }
+
+        $stmt = $this->pdo->prepare("
+            SELECT 1
+            FROM ad_categories
+            WHERE name = :name
+              AND id <> :id
+            LIMIT 1
+        ");
+        $stmt->execute([
+            ':name' => $name,
+            ':id' => $excludeCategoryId,
+        ]);
+
+        return (bool)$stmt->fetchColumn();
+    }
+
+    private function countAdsForCategory(int $categoryId): int
+    {
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM ads WHERE category_id = :id");
+        $stmt->execute([':id' => $categoryId]);
+
+        return (int)$stmt->fetchColumn();
     }
 }

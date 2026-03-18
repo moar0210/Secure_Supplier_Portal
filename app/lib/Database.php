@@ -1,13 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 class Database
 {
     private PDO $pdo;
 
     public function __construct(array $config)
     {
-        $db = $config["db"];
-        $dsn = "mysql:host={$db['host']};dbname={$db['name']};charset={$db['charset']}";
+        $db = $config['db'];
+        $port = isset($db['port']) ? (int)$db['port'] : 3306;
+        $dsn = "mysql:host={$db['host']};port={$port};dbname={$db['name']};charset={$db['charset']}";
 
         $options = [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,

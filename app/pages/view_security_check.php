@@ -1,0 +1,61 @@
+<h1>Security Check</h1>
+
+<p>This page is for verifying session + security baseline behavior.</p>
+
+<h2>Session</h2>
+<table>
+    <tbody>
+        <tr>
+            <th>Session active</th>
+            <td><?= session_status() === PHP_SESSION_ACTIVE ? 'yes' : 'no' ?></td>
+        </tr>
+        <tr>
+            <th>Session name</th>
+            <td><?= h($sessName) ?></td>
+        </tr>
+        <tr>
+            <th>Session id (masked)</th>
+            <td><?= h($sessIdMasked) ?></td>
+        </tr>
+        <tr>
+            <th>HTTPS</th>
+            <td><?= $isHttps ? 'yes' : 'no' ?></td>
+        </tr>
+        <tr>
+            <th>Cookie path</th>
+            <td><?= h((string)($cookieParams['path'] ?? '')) ?></td>
+        </tr>
+        <tr>
+            <th>Cookie domain</th>
+            <td><?= h((string)($cookieParams['domain'] ?? '')) ?></td>
+        </tr>
+        <tr>
+            <th>Cookie secure</th>
+            <td><?= !empty($cookieParams['secure']) ? 'true' : 'false' ?></td>
+        </tr>
+        <tr>
+            <th>Cookie httponly</th>
+            <td><?= !empty($cookieParams['httponly']) ? 'true' : 'false' ?></td>
+        </tr>
+        <tr>
+            <th>Last activity</th>
+            <td><?= h($lastStr) ?></td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>Headers</h2>
+<p>Open DevTools -> Network -> this request -> Response Headers and verify:</p>
+<ul>
+    <li>Content-Security-Policy</li>
+    <li>X-Content-Type-Options</li>
+    <li>Referrer-Policy</li>
+    <li>X-Frame-Options</li>
+    <li>Permissions-Policy (optional)</li>
+</ul>
+
+<h2>Notes</h2>
+<ul>
+    <li><strong>Secure cookie</strong> will be false on HTTP localhost; it becomes true on HTTPS.</li>
+    <li>If inactivity timeout is enabled, staying idle past the threshold should redirect to <code>?page=login&amp;timeout=1</code>.</li>
+</ul>

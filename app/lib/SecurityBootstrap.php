@@ -97,7 +97,8 @@ final class SecurityBootstrap
         session_destroy();
 
         $page = $_GET['page'] ?? 'home';
-        if ($page !== 'login' && $page !== 'logout') {
+        $publicPages = ['login', 'logout', 'reset_request', 'reset_password'];
+        if (!in_array($page, $publicPages, true)) {
             header('Location: ?page=login&timeout=1');
             exit;
         }
