@@ -17,19 +17,22 @@ $config = require $configPath;
 require $root . '/app/lib/SecurityBootstrap.php';
 require $root . '/app/lib/Database.php';
 require $root . '/app/lib/UserFacingException.php';
+require $root . '/app/lib/Crypto.php';
+require $root . '/app/lib/SupplierProfileEncryptionMap.php';
 
 $showDetailedErrors = false;
 
 try {
     $db = new Database($config);
     $pdo = $db->pdo();
+    $crypto = new Crypto((array)($config['crypto'] ?? []));
 } catch (Exception $e) {
     http_response_code(500);
 
     if ($showDetailedErrors) {
-        echo 'DB error: ' . h($e->getMessage());
+        echo 'Bootstrap error: ' . h($e->getMessage());
     } else {
-        echo 'Database connection failed. Please try again later.';
+        echo 'Application bootstrap failed. Please check the database and encryption configuration.';
     }
 
     exit;
@@ -49,14 +52,14 @@ require $root . '/app/lib/AdminController.php';
 
 $auth = new Auth($pdo);
 $adsService = new AdsService($pdo);
-$supplierService = new SupplierService($pdo);
+$supplierService = new SupplierService($pdo, $crypto);
 $view = new View($root . '/app/pages');
 
-$staticController = new StaticController($view, $auth, $db, $adsService, $supplierService, $config);
-$authController = new AuthController($view, $auth, $db, $adsService, $supplierService, $config);
-$supplierController = new SupplierController($view, $auth, $db, $adsService, $supplierService, $config);
-$adsController = new AdsController($view, $auth, $db, $adsService, $supplierService, $config);
-$adminController = new AdminController($view, $auth, $db, $adsService, $supplierService, $config);
+$staticController = new StaticController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
+$authController = new AuthController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
+$supplierController = new SupplierController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
+$adsController = new AdsController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
+$adminController = new AdminController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
 
 $page = (string)($_GET['page'] ?? 'home');
 

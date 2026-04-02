@@ -217,6 +217,10 @@ final class AdminController extends BaseController
             'sessIdMasked' => $sessIdMasked,
             'lastStr' => $lastStr,
             'isHttps' => $isHttps,
+            'cryptoEnabled' => $this->crypto->isEnabled(),
+            'cryptoDriver' => $this->crypto->driverName(),
+            'cryptoActiveKeyId' => $this->crypto->activeKeyId() === '' ? 'n/a' : $this->crypto->activeKeyId(),
+            'cryptoKeyCount' => $this->crypto->configuredKeyCount(),
         ], 200, 'Security Check');
     }
 }

@@ -7,15 +7,17 @@ abstract class BaseController
     protected View $view;
     protected Auth $auth;
     protected Database $db;
+    protected Crypto $crypto;
     protected AdsService $adsService;
     protected SupplierService $supplierService;
     protected array $config;
 
-    public function __construct(View $view, Auth $auth, Database $db, AdsService $adsService, SupplierService $supplierService, array $config)
+    public function __construct(View $view, Auth $auth, Database $db, Crypto $crypto, AdsService $adsService, SupplierService $supplierService, array $config)
     {
         $this->view = $view;
         $this->auth = $auth;
         $this->db = $db;
+        $this->crypto = $crypto;
         $this->adsService = $adsService;
         $this->supplierService = $supplierService;
         $this->config = $config;

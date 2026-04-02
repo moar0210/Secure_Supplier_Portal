@@ -54,8 +54,36 @@
     <li>Permissions-Policy (optional)</li>
 </ul>
 
+<h2>Encryption</h2>
+<table>
+    <tbody>
+        <tr>
+            <th>Encryption enabled</th>
+            <td><?= $cryptoEnabled ? 'yes' : 'no' ?></td>
+        </tr>
+        <tr>
+            <th>Crypto driver</th>
+            <td><?= h($cryptoDriver) ?></td>
+        </tr>
+        <tr>
+            <th>Active key id</th>
+            <td><?= h($cryptoActiveKeyId) ?></td>
+        </tr>
+        <tr>
+            <th>Configured keys</th>
+            <td><?= (int)$cryptoKeyCount ?></td>
+        </tr>
+    </tbody>
+</table>
+
 <h2>Notes</h2>
 <ul>
     <li><strong>Secure cookie</strong> will be false on HTTP localhost; it becomes true on HTTPS.</li>
     <li>If inactivity timeout is enabled, staying idle past the threshold should redirect to <code>?page=login&amp;timeout=1</code>.</li>
+    <li>This page exposes only safe encryption metadata. It never shows real keys, ciphertext, or decrypted supplier data.</li>
+    <li>The configured key count is only a count. It does not reveal any key material.</li>
+    <li>Operational key setup and rotation notes are documented in the README.</li>
+    <?php if (!$cryptoEnabled): ?>
+        <li>Encryption is currently disabled, so new sensitive profile writes are not protected at rest until <code>crypto.enabled</code> is turned on.</li>
+    <?php endif; ?>
 </ul>

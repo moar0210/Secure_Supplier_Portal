@@ -7,10 +7,12 @@ final class SupplierService
     private const EMPTY_UUID = 'EMPTY';
 
     private PDO $pdo;
+    private Crypto $crypto;
 
-    public function __construct(PDO $pdo)
+    public function __construct(PDO $pdo, Crypto $crypto)
     {
         $this->pdo = $pdo;
+        $this->crypto = $crypto;
     }
 
     public function listSuppliers(int $limit = 50): array
@@ -24,7 +26,16 @@ final class SupplierService
             LIMIT {$limit}
         ");
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        foreach ($rows as &$row) {
+            $row = $this->decryptFields($row, [
+                'email' => SupplierProfileEncryptionMap::SUPPLIERS['email'],
+            ]);
+        }
+        unset($row);
+
+        return $rows;
     }
 
     public function getProfile(int $supplierId): ?array
@@ -33,6 +44,7 @@ final class SupplierService
         if ($supplier === null) {
             return null;
         }
+        $supplier = $this->decryptFields($supplier, SupplierProfileEncryptionMap::SUPPLIERS);
 
         $address = $this->loadAddress($supplier['uuid_address_main'] ?? '');
         $contact = $this->loadContact($supplier['uuid_person_contact'] ?? '');
@@ -91,9 +103,9 @@ final class SupplierService
             $stmt->execute([
                 ':supplier_name' => $clean['company_name'],
                 ':short_name' => $clean['short_name'],
-                ':email' => $clean['email'],
+                ':email' => (string)$this->crypto->encryptNullable($clean['email'], SupplierProfileEncryptionMap::SUPPLIERS['email']),
                 ':homepage' => $clean['homepage'],
-                ':unique_id' => $clean['vat_number'],
+                ':unique_id' => (string)$this->crypto->encryptNullable($clean['vat_number'], SupplierProfileEncryptionMap::SUPPLIERS['unique_id']),
                 ':country_code' => $clean['country_code'],
                 ':uuid_address_main' => $addressUuid,
                 ':uuid_person_contact' => $contactUuid,
@@ -273,11 +285,11 @@ final class SupplierService
             $stmt->execute([
                 ':uuid_address' => $uuid,
                 ':country_code' => $clean['country_code'],
-                ':city' => $clean['city'],
-                ':description' => $clean['address_line_1'],
-                ':complement' => $clean['address_line_2'],
-                ':region' => $clean['region'],
-                ':postal_code' => $clean['postal_code'],
+                ':city' => (string)$this->crypto->encryptNullable($clean['city'], SupplierProfileEncryptionMap::ADDRESSES['city']),
+                ':description' => (string)$this->crypto->encryptNullable($clean['address_line_1'], SupplierProfileEncryptionMap::ADDRESSES['description']),
+                ':complement' => (string)$this->crypto->encryptNullable($clean['address_line_2'], SupplierProfileEncryptionMap::ADDRESSES['complement']),
+                ':region' => (string)$this->crypto->encryptNullable($clean['region'], SupplierProfileEncryptionMap::ADDRESSES['region']),
+                ':postal_code' => (string)$this->crypto->encryptNullable($clean['postal_code'], SupplierProfileEncryptionMap::ADDRESSES['postal_code']),
                 ':website' => $addressWebsite,
             ]);
         } else {
@@ -296,11 +308,11 @@ final class SupplierService
             $stmt->execute([
                 ':uuid_address' => $uuid,
                 ':country_code' => $clean['country_code'],
-                ':city' => $clean['city'],
-                ':description' => $clean['address_line_1'],
-                ':complement' => $clean['address_line_2'],
-                ':region' => $clean['region'],
-                ':postal_code' => $clean['postal_code'],
+                ':city' => (string)$this->crypto->encryptNullable($clean['city'], SupplierProfileEncryptionMap::ADDRESSES['city']),
+                ':description' => (string)$this->crypto->encryptNullable($clean['address_line_1'], SupplierProfileEncryptionMap::ADDRESSES['description']),
+                ':complement' => (string)$this->crypto->encryptNullable($clean['address_line_2'], SupplierProfileEncryptionMap::ADDRESSES['complement']),
+                ':region' => (string)$this->crypto->encryptNullable($clean['region'], SupplierProfileEncryptionMap::ADDRESSES['region']),
+                ':postal_code' => (string)$this->crypto->encryptNullable($clean['postal_code'], SupplierProfileEncryptionMap::ADDRESSES['postal_code']),
                 ':website' => $addressWebsite,
             ]);
         }
@@ -350,10 +362,10 @@ final class SupplierService
                 ':abbreviation' => $clean['contact_abbreviation'],
                 ':country_code' => $clean['country_code'],
                 ':uuid_address_main' => $addressUuid,
-                ':first_name' => $clean['contact_first_name'],
-                ':last_name' => $clean['contact_last_name'],
-                ':full_name' => $clean['contact_full_name'],
-                ':email_address' => $clean['email'],
+                ':first_name' => (string)$this->crypto->encryptNullable($clean['contact_first_name'], SupplierProfileEncryptionMap::PERSONS['first_name']),
+                ':last_name' => (string)$this->crypto->encryptNullable($clean['contact_last_name'], SupplierProfileEncryptionMap::PERSONS['last_name']),
+                ':full_name' => (string)$this->crypto->encryptNullable($clean['contact_full_name'], SupplierProfileEncryptionMap::PERSONS['full_name']),
+                ':email_address' => (string)$this->crypto->encryptNullable($clean['email'], SupplierProfileEncryptionMap::PERSONS['email_address']),
             ]);
         } else {
             $stmt = $this->pdo->prepare("
@@ -373,10 +385,10 @@ final class SupplierService
                 ':abbreviation' => $clean['contact_abbreviation'],
                 ':country_code' => $clean['country_code'],
                 ':uuid_address_main' => $addressUuid,
-                ':first_name' => $clean['contact_first_name'],
-                ':last_name' => $clean['contact_last_name'],
-                ':full_name' => $clean['contact_full_name'],
-                ':email_address' => $clean['email'],
+                ':first_name' => (string)$this->crypto->encryptNullable($clean['contact_first_name'], SupplierProfileEncryptionMap::PERSONS['first_name']),
+                ':last_name' => (string)$this->crypto->encryptNullable($clean['contact_last_name'], SupplierProfileEncryptionMap::PERSONS['last_name']),
+                ':full_name' => (string)$this->crypto->encryptNullable($clean['contact_full_name'], SupplierProfileEncryptionMap::PERSONS['full_name']),
+                ':email_address' => (string)$this->crypto->encryptNullable($clean['email'], SupplierProfileEncryptionMap::PERSONS['email_address']),
             ]);
         }
 
@@ -423,9 +435,9 @@ final class SupplierService
             ");
             $stmt->execute([
                 ':uuid_entity' => $supplierUuid,
-                ':country_prefix' => $clean['phone_country_prefix'],
-                ':area_code' => $clean['phone_area_code'],
-                ':phone_number' => $clean['phone_number'],
+                ':country_prefix' => $this->crypto->encryptNullable($clean['phone_country_prefix'], SupplierProfileEncryptionMap::PHONES_ENTITIES['country_prefix']),
+                ':area_code' => $this->crypto->encryptNullable($clean['phone_area_code'], SupplierProfileEncryptionMap::PHONES_ENTITIES['area_code']),
+                ':phone_number' => (string)$this->crypto->encryptNullable($clean['phone_number'], SupplierProfileEncryptionMap::PHONES_ENTITIES['phone_number']),
             ]);
             return;
         }
@@ -442,9 +454,9 @@ final class SupplierService
             WHERE id_phone_entity = :id
         ");
         $stmt->execute([
-            ':country_prefix' => $clean['phone_country_prefix'],
-            ':area_code' => $clean['phone_area_code'],
-            ':phone_number' => $clean['phone_number'],
+            ':country_prefix' => $this->crypto->encryptNullable($clean['phone_country_prefix'], SupplierProfileEncryptionMap::PHONES_ENTITIES['country_prefix']),
+            ':area_code' => $this->crypto->encryptNullable($clean['phone_area_code'], SupplierProfileEncryptionMap::PHONES_ENTITIES['area_code']),
+            ':phone_number' => (string)$this->crypto->encryptNullable($clean['phone_number'], SupplierProfileEncryptionMap::PHONES_ENTITIES['phone_number']),
             ':id' => (int)$existing['id_phone_entity'],
         ]);
     }
@@ -466,7 +478,7 @@ final class SupplierService
 
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        return $row ?: null;
+        return $row ? $this->decryptFields($row, SupplierProfileEncryptionMap::ADDRESSES) : null;
     }
 
     private function loadContact(string $uuid): ?array
@@ -486,7 +498,7 @@ final class SupplierService
 
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        return $row ?: null;
+        return $row ? $this->decryptFields($row, SupplierProfileEncryptionMap::PERSONS) : null;
     }
 
     private function loadMainPhone(string $supplierUuid): ?array
@@ -503,7 +515,7 @@ final class SupplierService
 
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        return $row ?: null;
+        return $row ? $this->decryptFields($row, SupplierProfileEncryptionMap::PHONES_ENTITIES) : null;
     }
 
     private function ensureAddressLink(string $supplierUuid, string $addressUuid): void
@@ -601,9 +613,9 @@ final class SupplierService
         return preg_replace('/\D+/', '', $value) ?? '';
     }
 
-    private function normalizePhoneCodeForStorage(string $value): ?int
+    private function normalizePhoneCodeForStorage(string $value): ?string
     {
-        return $value === '' ? null : (int)$value;
+        return $value === '' ? null : $value;
     }
 
     private function normalizePhoneCodeForForm(mixed $value): string
@@ -639,5 +651,21 @@ final class SupplierService
         $parts[] = $phoneNumber;
 
         return implode(' ', $parts);
+    }
+
+    private function decryptFields(array $row, array $fieldMap): array
+    {
+        foreach ($fieldMap as $column => $aad) {
+            if (!array_key_exists($column, $row)) {
+                continue;
+            }
+
+            $value = $row[$column];
+            $row[$column] = $value === null
+                ? null
+                : $this->crypto->decryptNullable((string)$value, $aad);
+        }
+
+        return $row;
     }
 }

@@ -1,0 +1,88 @@
+Final Roadmap (Week 3 → Week 14)
+Phase 1 — Architecture + DB selection + runnable baseline (Weeks 3–5)
+Goal: You have a running MVC skeleton connected to MariaDB using prepared statements, and your portal DB subset is defined (from the SQL dump, but trimmed).
+To-do
+Set up local LAMP + repo + basic CI/lint (minimal).
+Create MVC skeleton: routing → controllers → models → views.
+Create DB layer (PDO) with prepared statements as the only path to DB.
+From the legacy SQL dump: select only needed entities; produce:
+ER sketch + normalized schema + indexing strategy draft
+Implement “vertical slice”:
+one protected page behind a stub auth
+seed data script
+Start thesis writing (light but consistent):
+Ch1 skeleton + Ch2 skeleton (don’t over-polish yet)
+Exit criteria
+App runs locally, connects to DB, has routing + one protected page.
+DB schema subset exists (enough to build the modules).
+You have initial diagrams (system overview + at least login sequence).
+
+Phase 2 — Authentication + RBAC + CSRF baseline (Week 6)
+Goal: Secure access foundation: login/logout, sessions, role checks, CSRF baseline.
+To-do
+Implement login/logout + password hashing (bcrypt/Argon2).
+Secure sessions (regen, cookie flags, timeout).
+Implement RBAC guard (Admin vs Supplier) and protect routes.
+Add CSRF token system for all state-changing forms.
+Optional (only if time): password reset design/PoC (spec mentions it).
+Exit criteria
+You can log in as Admin or Supplier.
+Role-based access works everywhere.
+CSRF exists and is wired into forms.
+
+Phase 3 — Supplier profile + Ads + Admin approval workflow (Weeks 7–8)
+Goal: Real business data exists; full “supplier → admin → approval” demo works.
+To-do
+Supplier profile CRUD (company info + optional logo upload with safe handling).
+Ads CRUD (supplier): create/edit/activate/deactivate.
+Admin approval flow: approve/reject + status + timestamp + who approved.
+Enforce tenant isolation: supplier only sees own data; admin sees all.
+Logging/audit: profile updates + ad status changes.
+Thesis: start Ch3 Design + begin Ch4 Implementation (auth + profile + ads).
+Exit criteria
+Supplier profile done.
+Ads end-to-end approval done and demoable.
+Access control + logs in place.
+
+Phase 4 — Encryption-at-rest + key handling + security writeup (Week 9)
+Goal: Implement application-level encryption for selected sensitive columns + document tradeoffs (Pi/offline).
+To-do
+Decide encrypted fields (based on risk/GDPR relevance): contact details, addresses, etc.
+Implement crypto module (encrypt-before-write, decrypt-on-read, AEAD).
+Key handling via ENV/config; document backup + rotation strategy conceptually.
+Add/confirm XSS output escaping policy + secure cookies + headers baseline.
+Do simple benchmarks: with/without encryption on typical operations.
+Thesis: security design, GDPR considerations, tradeoffs, risk analysis.
+Exit criteria
+Encrypted DB columns are unreadable at rest.
+App still works for real flows (profile/ads still function).
+You have measurable performance notes + documented key strategy.
+
+Phase 5 — Invoicing + PDF + payment tracking (Weeks 10–11)
+Goal: Complete full business lifecycle: monthly invoices, statuses, PDF download, manual payments.
+To-do
+Invoice data model + admin CRUD.
+Monthly generation logic (idempotent, rule-based).
+Status flow: Draft → Sent → Paid → Overdue.
+PDF export for invoices.
+Payment tracking: admin manual confirmation; store date/amount/method.
+Supplier view: invoice history + download PDF + see payment status.
+Exit criteria
+“Generate month X” works without duplicates.
+Supplier can download invoice PDFs.
+Admin can mark paid; overdue works.
+
+Phase 6 — Testing + hardening + performance + final documentation + demo (Weeks 12–14)
+Goal: Exam-ready, reproducible, and handover-ready to Heloisa.
+To-do
+Week 12: test plan + test report; fix core-flow bugs.
+Week 13: security review (OWASP risks), headers/cookies, rate limiting if feasible; DB indexing & query tuning for Pi.
+Week 14: finalize thesis + finalize guides + demo dataset + repo cleanup + release tag.
+Exit criteria
+Fresh install from README works offline on local LAMP.
+Demo requires minimal explanation and covers the full flow.
+Thesis matches required structure (Ch1–6 + appendices).
+
+Important scope note (don’t get trapped)
+Statistics dashboard is optional/out-of-scope per the extended description, even though the spec lists it—treat it as “bonus if time”.
+All data encrypted is in the spec, but project context clarifies a practical interpretation for Pi: application-level encryption on sensitive columns with a documented tradeoff.
