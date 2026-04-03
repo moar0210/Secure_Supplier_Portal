@@ -75,6 +75,8 @@
                 <a href="?page=dbtest">DB Test</a>
                 <a href="?page=suppliers">Suppliers</a>
                 <a href="?page=admin_ads_queue">Ads Queue</a>
+                <a href="?page=admin_invoices">Invoices</a>
+                <a href="?page=admin_pricing_rules">Pricing Rules</a>
                 <a href="?page=admin_categories">Categories</a>
                 <a href="?page=security_check">Security Check</a>
                 <a href="?page=admin">Admin</a>
@@ -83,9 +85,11 @@
                 <?php if ($sid !== null): ?>
                     <a href="?page=supplier&id=<?= (int)$sid ?>">My Profile</a>
                     <a href="?page=ads_list">My Ads</a>
+                    <a href="?page=supplier_invoices">My Invoices</a>
                 <?php else: ?>
                     <span style="opacity:.8;">My Profile (unlinked)</span>
                     <span style="opacity:.8;">My Ads (unlinked)</span>
+                    <span style="opacity:.8;">My Invoices (unlinked)</span>
                 <?php endif; ?>
             <?php endif; ?>
         </nav>

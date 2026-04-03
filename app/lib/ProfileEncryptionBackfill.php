@@ -136,7 +136,8 @@ final class ProfileEncryptionBackfill
             ];
         }
 
-        $stmt = $this->pdo->query($selectSql);
+        $stmt = $this->pdo->prepare($selectSql);
+        $stmt->execute();
 
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $stats['_rows_scanned']++;

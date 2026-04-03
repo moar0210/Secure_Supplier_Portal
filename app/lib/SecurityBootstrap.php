@@ -56,12 +56,12 @@ final class SecurityBootstrap
                 'domain' => $params['domain'] ?? '',
                 'secure' => $isHttps,
                 'httponly' => true,
-                'samesite' => 'Lax',
+                'samesite' => 'Strict',
             ]);
         } else {
             session_set_cookie_params(
                 0,
-                ($params['path'] ?? '/') . '; samesite=Lax',
+                ($params['path'] ?? '/') . '; samesite=Strict',
                 $params['domain'] ?? '',
                 $isHttps,
                 true
@@ -89,10 +89,7 @@ final class SecurityBootstrap
 
         $_SESSION = [];
 
-        if (ini_get('session.use_cookies')) {
-            $p = session_get_cookie_params();
-            setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], (bool)$p['secure'], (bool)$p['httponly']);
-        }
+        self::expireSessionCookie();
 
         session_destroy();
 
@@ -102,6 +99,38 @@ final class SecurityBootstrap
             header('Location: ?page=login&timeout=1');
             exit;
         }
+    }
+
+    public static function expireSessionCookie(): void
+    {
+        if (!ini_get('session.use_cookies')) {
+            return;
+        }
+
+        $params = session_get_cookie_params();
+
+        if (PHP_VERSION_ID >= 70300) {
+            setcookie(session_name(), '', [
+                'expires' => time() - 42000,
+                'path' => $params['path'] ?? '/',
+                'domain' => $params['domain'] ?? '',
+                'secure' => (bool)($params['secure'] ?? false),
+                'httponly' => (bool)($params['httponly'] ?? true),
+                'samesite' => 'Strict',
+            ]);
+
+            return;
+        }
+
+        setcookie(
+            session_name(),
+            '',
+            time() - 42000,
+            ($params['path'] ?? '/') . '; samesite=Strict',
+            $params['domain'] ?? '',
+            (bool)($params['secure'] ?? false),
+            (bool)($params['httponly'] ?? true)
+        );
     }
 }
 

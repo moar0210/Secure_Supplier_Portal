@@ -179,7 +179,7 @@ final class AdsController extends BaseController
         $active = ((string)($_POST['active'] ?? '0') === '1');
 
         try {
-            $this->adsService->toggleActiveForSupplier($adId, $supplierId, $active);
+            $this->adsService->toggleActiveForSupplier($adId, $supplierId, $active, (int)$this->auth->userId());
             $this->logActivity('Ad activation changed', [
                 'ad_id' => $adId,
                 'supplier_id' => $supplierId,

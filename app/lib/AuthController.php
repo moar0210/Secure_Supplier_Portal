@@ -63,6 +63,8 @@ final class AuthController extends BaseController
         $error = null;
         $identifier = '';
         $submitted = false;
+        $resetLink = null;
+        $resetExpiresAt = null;
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Csrf::verifyOrFail();
@@ -77,6 +79,11 @@ final class AuthController extends BaseController
                         'username' => (string)$tokenData['username'],
                         'expires_at' => (string)$tokenData['expires_at'],
                     ]);
+                    $resetLink = '?page=reset_password&username='
+                        . rawurlencode((string)$tokenData['username'])
+                        . '&token='
+                        . rawurlencode((string)$tokenData['token']);
+                    $resetExpiresAt = (string)$tokenData['expires_at'];
                 }
             } catch (Throwable $e) {
                 $this->logUnexpected($e, 'Password reset request failed');
@@ -88,6 +95,8 @@ final class AuthController extends BaseController
             'error' => $error,
             'identifier' => $identifier,
             'submitted' => $submitted,
+            'resetLink' => $resetLink,
+            'resetExpiresAt' => $resetExpiresAt,
         ], 200, 'Reset Password');
     }
 

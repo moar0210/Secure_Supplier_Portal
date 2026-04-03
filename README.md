@@ -1,14 +1,16 @@
 # Supplier Portal Thesis 2026
 
-Lightweight PHP + MariaDB supplier portal built for local/offline-first use. The current implementation uses a simple MVC-ish structure with PDO, role-based access, CSRF protection, supplier profile management, advertisement CRUD, and admin review tools.
+Lightweight PHP + MariaDB supplier portal built for local/offline-first use. The current implementation uses a simple MVC-ish structure with PDO, role-based access, CSRF protection, supplier profile management, advertisement CRUD, admin review tools, monthly invoicing, PDF export, and manual payment tracking.
 
 ## Scope
 
-This repository implements the practical thesis interpretation of profile encryption:
+This repository implements the practical thesis interpretation of profile encryption together with the phase 5 invoicing flow:
 
 - Sensitive supplier-profile PII is encrypted at rest at the application layer.
 - Auth data, ads, routing, joins, ownership checks, and admin review stay compatible with the existing schema.
-- This phase does not add invoicing, payment tracking, or PDF export.
+- Monthly invoices are generated per supplier from approved active ads, with idempotent regeneration for draft invoices.
+- Admin tools include pricing rule management, invoice generation, status transitions, overdue checks, and payment recording.
+- Suppliers can view only their own invoices and download their own PDFs.
 - This phase does not attempt blanket encryption of every database column in the legacy schema.
 
 ## Encrypted At Rest
@@ -46,7 +48,8 @@ These values remain plaintext to preserve compatibility and scope:
 - Reset and verification tokens
 - Roles and role mappings
 - Ads, categories, and ad status history
-- Anything related to invoices, payments, or PDF export
+- Invoice amounts, line items, status fields, numbering, billing periods, and payment totals
+- Encrypted invoice supplier snapshots use the existing crypto module so PDFs can render historical supplier details without exposing them at rest
 
 ## Encryption Design
 
@@ -102,18 +105,20 @@ Then export that value as `SUPPLIER_PORTAL_KEY_V1` in the shell or environment u
 
 ## Migration
 
-Run the new migration after the previous ones:
+Run the new migrations after the previous ones:
 
 ```powershell
 C:\xampp\mysql\bin\mysql.exe -u YOUR_DB_USER -p YOUR_DB_NAME < database\migrations\005_profile_encryption.sql
+C:\xampp\mysql\bin\mysql.exe -u YOUR_DB_USER -p YOUR_DB_NAME < database\migrations\006_invoicing.sql
 ```
 
-What the migration does:
+What the migrations do:
 
 - Widens encrypted target columns so versioned ciphertext fits safely
 - Changes supplier phone code/number fields to string columns
 - Updates generated columns that would otherwise be too small for ciphertext
 - Removes the legacy phone uniqueness index that no longer makes sense with randomized AEAD ciphertext
+- Adds pricing rules, invoices, invoice lines, invoice payments, invoice status history, numbering sequences, and ad activation history
 
 ## Backfill Existing Plaintext Rows
 

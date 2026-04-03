@@ -13,7 +13,8 @@ final class StaticController extends BaseController
     {
         $this->auth->requireRole('ADMIN');
 
-        $stmt = $this->pdo()->query('SELECT NOW() AS now_time');
+        $stmt = $this->pdo()->prepare('SELECT NOW() AS now_time');
+        $stmt->execute();
         $row = $stmt->fetch();
 
         $this->render('view_dbtest', [

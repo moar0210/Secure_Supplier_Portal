@@ -42,6 +42,7 @@ require $root . '/app/lib/auth.php';
 require $root . '/app/lib/Csrf.php';
 require $root . '/app/lib/AdsService.php';
 require $root . '/app/lib/SupplierService.php';
+require $root . '/app/lib/InvoiceService.php';
 require $root . '/app/lib/View.php';
 require $root . '/app/lib/BaseController.php';
 require $root . '/app/lib/StaticController.php';
@@ -49,6 +50,7 @@ require $root . '/app/lib/AuthController.php';
 require $root . '/app/lib/SupplierController.php';
 require $root . '/app/lib/AdsController.php';
 require $root . '/app/lib/AdminController.php';
+require $root . '/app/lib/InvoiceController.php';
 
 $auth = new Auth($pdo);
 $adsService = new AdsService($pdo);
@@ -60,6 +62,7 @@ $authController = new AuthController($view, $auth, $db, $crypto, $adsService, $s
 $supplierController = new SupplierController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
 $adsController = new AdsController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
 $adminController = new AdminController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
+$invoiceController = new InvoiceController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
 
 $page = (string)($_GET['page'] ?? 'home');
 
@@ -68,6 +71,7 @@ $routes = [
     'dbtest' => [$staticController, 'dbtest'],
     'suppliers' => [$supplierController, 'index'],
     'supplier' => [$supplierController, 'show'],
+    'supplier_logo' => [$supplierController, 'logo'],
     'login' => [$authController, 'login'],
     'logout' => [$authController, 'logout'],
     'reset_request' => [$authController, 'resetRequest'],
@@ -85,6 +89,11 @@ $routes = [
     'admin_ad_review' => [$adminController, 'adReview'],
     'admin_categories' => [$adminController, 'categories'],
     'admin_category_edit' => [$adminController, 'categoryEdit'],
+    'admin_invoices' => [$invoiceController, 'adminInvoices'],
+    'admin_invoice_view' => [$invoiceController, 'adminInvoiceView'],
+    'admin_pricing_rules' => [$invoiceController, 'adminPricingRules'],
+    'supplier_invoices' => [$invoiceController, 'supplierInvoices'],
+    'invoice_pdf' => [$invoiceController, 'pdf'],
 ];
 
 $handler = $routes[$page] ?? [$staticController, 'notFound'];

@@ -12,7 +12,7 @@
     </div>
 <?php endif; ?>
 
-<form method="post" autocomplete="off">
+<form method="post" enctype="multipart/form-data" autocomplete="off">
     <?= Csrf::input(); ?>
 
     <div style="margin:10px 0;">
@@ -47,9 +47,29 @@
 
     <div style="margin:10px 0;">
         <strong>Logo upload</strong><br>
-        <span style="opacity:.85;">
-            Logo upload is deferred in this prototype until secure file upload and storage handling is implemented.
-        </span>
+        <?php if (!empty($logo)): ?>
+            <div style="margin:8px 0 10px;">
+                <img
+                    src="?page=supplier_logo&amp;id=<?= (int)$supplier['id_supplier'] ?>&amp;v=<?= rawurlencode((string)($logo['updated_at'] ?? '')) ?>"
+                    alt="Current supplier logo"
+                    style="display:block;max-width:180px;max-height:180px;border:1px solid #ccc;padding:6px;background:#fff;">
+                <div style="margin-top:8px; opacity:.85;">
+                    Current file: <?= h((string)($logo['original_filename'] ?? 'supplier-logo')) ?>
+                    (<?= number_format(((int)($logo['file_size'] ?? 0)) / 1024, 1) ?> KB)
+                </div>
+                <label style="display:block;margin-top:8px;">
+                    <input type="checkbox" name="remove_logo" value="1">
+                    Remove current logo
+                </label>
+            </div>
+        <?php else: ?>
+            <div style="margin:8px 0; opacity:.85;">No logo uploaded yet.</div>
+        <?php endif; ?>
+
+        <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+        <div style="margin-top:6px; opacity:.85;">
+            PNG, JPG, or WebP up to 2 MB. Uploaded files are validated and stored outside the web root.
+        </div>
     </div>
 
     <div style="margin:10px 0;">

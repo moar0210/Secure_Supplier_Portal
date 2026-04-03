@@ -266,6 +266,10 @@ final class AdsService
                 $this->insertStatusHistory($adId, $oldStatus, $newStatus, $actorUserId, null);
             }
 
+            if ($forceInactive && !empty($current['is_active'])) {
+                $this->insertActivationHistory($adId, true, false, $actorUserId, 'Ad forced inactive during edit workflow.');
+            }
+
             $this->pdo->commit();
         } catch (\Throwable $e) {
             $this->pdo->rollBack();
@@ -276,7 +280,7 @@ final class AdsService
     /**
      * Supplier can only activate/deactivate APPROVED ads.
      */
-    public function toggleActiveForSupplier(int $adId, int $supplierId, bool $active): void
+    public function toggleActiveForSupplier(int $adId, int $supplierId, bool $active, ?int $actorUserId = null): void
     {
         $current = $this->getForSupplier($adId, $supplierId);
         if (!$current) {
@@ -287,16 +291,31 @@ final class AdsService
             throw new UserFacingException('Only APPROVED ads can be activated/deactivated.');
         }
 
-        $stmt = $this->pdo->prepare("
-            UPDATE ads
-            SET is_active = :ia, updated_at = NOW()
-            WHERE id = :id AND supplier_id = :sid
-        ");
-        $stmt->execute([
-            ':ia'  => $active ? 1 : 0,
-            ':id'  => $adId,
-            ':sid' => $supplierId,
-        ]);
+        $oldActive = !empty($current['is_active']);
+        if ($oldActive === $active) {
+            return;
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare("
+                UPDATE ads
+                SET is_active = :ia, updated_at = NOW()
+                WHERE id = :id AND supplier_id = :sid
+            ");
+            $stmt->execute([
+                ':ia'  => $active ? 1 : 0,
+                ':id'  => $adId,
+                ':sid' => $supplierId,
+            ]);
+
+            $this->insertActivationHistory($adId, $oldActive, $active, $actorUserId, $active ? 'Ad activated by supplier.' : 'Ad deactivated by supplier.');
+
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
     }
 
     public function deleteForSupplier(int $adId, int $supplierId): void
@@ -344,7 +363,7 @@ final class AdsService
         }
 
         if ($status === null) {
-            $stmt = $this->pdo->query("
+            $stmt = $this->pdo->prepare("
                 SELECT
                     a.id,
                     a.supplier_id,
@@ -361,6 +380,7 @@ final class AdsService
                 LEFT JOIN ad_categories c ON c.id = a.category_id
                 ORDER BY a.updated_at DESC, a.id DESC
             ");
+            $stmt->execute();
             return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
         }
 
@@ -481,11 +501,12 @@ final class AdsService
 
     public function listCategories(): array
     {
-        $stmt = $this->pdo->query("
+        $stmt = $this->pdo->prepare("
             SELECT id, name
             FROM ad_categories
             ORDER BY name ASC
         ");
+        $stmt->execute();
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
@@ -666,6 +687,21 @@ final class AdsService
             ':new' => $new,
             ':r'   => $reason,
             ':uid' => $actorUserId,
+        ]);
+    }
+
+    private function insertActivationHistory(int $adId, bool $oldActive, bool $newActive, ?int $actorUserId, ?string $note): void
+    {
+        $stmt = $this->pdo->prepare("
+            INSERT INTO ad_activation_history (ad_id, old_is_active, new_is_active, changed_by_user_id, note, changed_at)
+            VALUES (:ad_id, :old_is_active, :new_is_active, :changed_by_user_id, :note, NOW())
+        ");
+        $stmt->execute([
+            ':ad_id' => $adId,
+            ':old_is_active' => $oldActive ? 1 : 0,
+            ':new_is_active' => $newActive ? 1 : 0,
+            ':changed_by_user_id' => $actorUserId,
+            ':note' => $note,
         ]);
     }
 

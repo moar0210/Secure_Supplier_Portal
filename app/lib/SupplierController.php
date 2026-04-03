@@ -17,6 +17,12 @@ final class SupplierController extends BaseController
     {
         $this->auth->requireLogin();
 
+        $isAdmin = $this->auth->hasRole('ADMIN');
+        $isSupplier = $this->auth->hasRole('SUPPLIER');
+        if (!$isAdmin && !$isSupplier) {
+            $this->redirect('?page=403');
+        }
+
         $id = $_GET['id'] ?? null;
         if (!$id || !ctype_digit((string)$id)) {
             $this->redirect('?page=404');
@@ -24,7 +30,7 @@ final class SupplierController extends BaseController
 
         $supplierIdRequested = (int)$id;
 
-        if ($this->auth->hasRole('SUPPLIER') && !$this->auth->hasRole('ADMIN')) {
+        if ($isSupplier && !$isAdmin) {
             $ownSupplierId = $this->auth->supplierId();
             if ($ownSupplierId === null || $ownSupplierId !== $supplierIdRequested) {
                 $this->redirect('?page=403');
@@ -58,7 +64,16 @@ final class SupplierController extends BaseController
             ];
 
             try {
-                $this->supplierService->updateProfile($supplierIdRequested, $_POST);
+                $logoUpload = is_array($_FILES['logo'] ?? null) ? $_FILES['logo'] : null;
+                $removeLogo = ((string)($_POST['remove_logo'] ?? '0') === '1');
+
+                $this->supplierService->updateProfile(
+                    $supplierIdRequested,
+                    $_POST,
+                    $logoUpload,
+                    $removeLogo,
+                    $this->auth->userId()
+                );
                 $this->logActivity('Supplier profile updated', [
                     'supplier_id' => $supplierIdRequested,
                     'actor_user_id' => $this->auth->userId(),
@@ -70,6 +85,7 @@ final class SupplierController extends BaseController
         }
 
         $supplier = $this->supplierService->getProfile($supplierIdRequested);
+        $logo = $this->supplierService->getLogoMeta($supplierIdRequested);
 
         if (!$supplier) {
             $this->redirect('?page=404');
@@ -81,8 +97,49 @@ final class SupplierController extends BaseController
 
         $this->render('view_supplier', [
             'supplier' => $supplier,
+            'logo' => $logo,
             'error' => $error,
             'updated' => $updated,
         ], 200, 'Supplier Profile');
+    }
+
+    public function logo(): void
+    {
+        $this->auth->requireLogin();
+
+        $isAdmin = $this->auth->hasRole('ADMIN');
+        $isSupplier = $this->auth->hasRole('SUPPLIER');
+        if (!$isAdmin && !$isSupplier) {
+            $this->redirect('?page=403');
+        }
+
+        $id = $_GET['id'] ?? null;
+        if (!$id || !ctype_digit((string)$id)) {
+            $this->redirect('?page=404');
+        }
+
+        $supplierIdRequested = (int)$id;
+
+        if ($isSupplier && !$isAdmin) {
+            $ownSupplierId = $this->auth->supplierId();
+            if ($ownSupplierId === null || $ownSupplierId !== $supplierIdRequested) {
+                $this->redirect('?page=403');
+            }
+        }
+
+        $logo = $this->supplierService->getLogoAsset($supplierIdRequested);
+        if ($logo === null) {
+            $this->redirect('?page=404');
+        }
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        header('Content-Type: ' . (string)$logo['mime_type']);
+        header('Content-Length: ' . (string)(filesize((string)$logo['path']) ?: 0));
+        header('Content-Disposition: inline; filename="' . (string)$logo['download_name'] . '"');
+        readfile((string)$logo['path']);
+        exit;
     }
 }
