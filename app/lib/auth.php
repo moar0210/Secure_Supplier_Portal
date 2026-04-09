@@ -108,8 +108,8 @@ class Auth
 
         $this->resetLoginFailures((int)$user['id']);
 
-        if (password_needs_rehash((string)$user['password_hash'], PASSWORD_BCRYPT)) {
-            $this->updatePasswordHash((int)$user['id'], password_hash($password, PASSWORD_BCRYPT));
+        if (password_needs_rehash((string)$user['password_hash'], PASSWORD_DEFAULT)) {
+            $this->updatePasswordHash((int)$user['id'], $this->hashPassword($password));
         }
 
         $rolesStmt = $this->pdo->prepare("
@@ -153,6 +153,8 @@ class Auth
         if ($identifier === '') {
             return null;
         }
+
+        $this->purgeExpiredResetTokens();
 
         $user = $this->findUserByIdentifier($identifier, true, 'username');
 
@@ -198,7 +200,7 @@ class Auth
 
         $this->validateNewPassword($newPassword, $confirmPassword);
 
-        $passwordHash = password_hash($newPassword, PASSWORD_BCRYPT);
+        $passwordHash = $this->hashPassword($newPassword);
         $this->updatePasswordHashForUsername($username, $passwordHash);
 
         $stmt = $this->pdo->prepare('DELETE FROM verification_token WHERE username = :username');
@@ -373,6 +375,8 @@ class Auth
             return null;
         }
 
+        $this->purgeExpiredResetTokens();
+
         $stmt = $this->pdo->prepare("
             SELECT username, expiry_date, token
             FROM verification_token
@@ -387,6 +391,7 @@ class Auth
         }
 
         if (empty($row['expiry_date']) || strtotime((string)$row['expiry_date']) < time()) {
+            $this->deleteResetTokenForUsername($username);
             return null;
         }
 
@@ -395,9 +400,35 @@ class Auth
             : null;
     }
 
+    private function hashPassword(string $password): string
+    {
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        if (!is_string($hash) || $hash === '') {
+            throw new RuntimeException('Unable to securely hash the password.');
+        }
+
+        return $hash;
+    }
+
     private function hashResetToken(string $rawToken): string
     {
         return hash('sha256', $rawToken);
+    }
+
+    private function purgeExpiredResetTokens(): void
+    {
+        $stmt = $this->pdo->prepare("
+            DELETE FROM verification_token
+            WHERE expiry_date IS NOT NULL
+              AND expiry_date < NOW()
+        ");
+        $stmt->execute();
+    }
+
+    private function deleteResetTokenForUsername(string $username): void
+    {
+        $stmt = $this->pdo->prepare('DELETE FROM verification_token WHERE username = :username');
+        $stmt->execute([':username' => $username]);
     }
 
     private function logAuthEvent(string $event, array $context = []): void

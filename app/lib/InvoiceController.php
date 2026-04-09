@@ -17,7 +17,7 @@ final class InvoiceController extends BaseController
         $this->auth->requireRole('ADMIN');
 
         $filters = [
-            'status' => (string)($_GET['status'] ?? ''),
+            'status' => (string)($_GET['status'] ?? 'ALL'),
             'invoice_number' => (string)($_GET['invoice_number'] ?? ''),
             'supplier_id' => (string)($_GET['supplier_id'] ?? ''),
             'billing_month' => (string)($_GET['billing_month'] ?? ''),
@@ -38,10 +38,11 @@ final class InvoiceController extends BaseController
                     $billingMonth = (string)($_POST['billing_month'] ?? date('Y-m'));
                     $result = $this->invoiceService->generateMonthlyInvoices($billingMonth, (int)$this->auth->userId());
                     $notice = sprintf(
-                        'Billing %s: created %d, updated %d, skipped %d, failed %d.',
+                        'Billing %s: created %d, updated %d, removed %d, skipped %d, failed %d.',
                         $result['billing_month'],
                         $result['created'],
                         $result['updated'],
+                        $result['removed'],
                         $result['skipped'],
                         $result['failed']
                     );
@@ -50,6 +51,7 @@ final class InvoiceController extends BaseController
                         'billing_month' => $result['billing_month'],
                         'created' => $result['created'],
                         'updated' => $result['updated'],
+                        'removed' => $result['removed'],
                         'skipped' => $result['skipped'],
                         'failed' => $result['failed'],
                         'actor_user_id' => $this->auth->userId(),
@@ -79,9 +81,18 @@ final class InvoiceController extends BaseController
             }
         }
 
+        $rows = [];
+        try {
+            $rows = $this->invoiceService->listInvoicesForAdmin($filters);
+        } catch (Throwable $e) {
+            if ($error === null) {
+                $error = $this->presentError($e, 'Unable to load invoices right now.');
+            }
+        }
+
         $this->render('view_admin_invoices', [
             'filters' => $filters,
-            'rows' => $this->invoiceService->listInvoicesForAdmin($filters),
+            'rows' => $rows,
             'error' => $error,
             'notice' => $notice,
         ], 200, 'Invoices');
@@ -220,13 +231,22 @@ final class InvoiceController extends BaseController
         }
 
         $filters = [
-            'status' => (string)($_GET['status'] ?? ''),
+            'status' => (string)($_GET['status'] ?? 'ALL'),
             'billing_month' => (string)($_GET['billing_month'] ?? ''),
         ];
 
+        $error = null;
+        $rows = [];
+        try {
+            $rows = $this->invoiceService->listInvoicesForSupplier($supplierId, $filters);
+        } catch (Throwable $e) {
+            $error = $this->presentError($e, 'Unable to load your invoices right now.');
+        }
+
         $this->render('view_supplier_invoices', [
             'filters' => $filters,
-            'rows' => $this->invoiceService->listInvoicesForSupplier($supplierId, $filters),
+            'rows' => $rows,
+            'error' => $error,
         ], 200, 'My Invoices');
     }
 

@@ -10,7 +10,7 @@
     <?= Csrf::input(); ?>
     <div>
         <label>Name</label><br>
-        <input name="name" required style="width:320px;" value="<?= h((string)$current['name']) ?>">
+        <input name="name" required maxlength="100" style="width:320px;" value="<?= h((string)$current['name']) ?>">
     </div>
     <button type="submit">Save</button>
     <a href="?page=admin_categories" style="margin-left:10px;">Cancel</a>

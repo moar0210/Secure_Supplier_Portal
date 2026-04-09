@@ -109,6 +109,17 @@ final class AdsController extends BaseController
             Csrf::verifyOrFail();
 
             $action = (string)($_POST['action'] ?? '');
+            $submittedValues = null;
+            if ($action !== 'submit') {
+                $submittedValues = [
+                    'title' => (string)($_POST['title'] ?? ''),
+                    'description' => (string)($_POST['description'] ?? ''),
+                    'price_text' => (string)($_POST['price_text'] ?? ''),
+                    'category_id' => (string)($_POST['category_id'] ?? ''),
+                    'valid_from' => (string)($_POST['valid_from'] ?? ''),
+                    'valid_to' => (string)($_POST['valid_to'] ?? ''),
+                ];
+            }
 
             try {
                 if ($action === 'submit') {
@@ -141,6 +152,12 @@ final class AdsController extends BaseController
             }
 
             $ad = $this->adsService->getForSupplier($adId, $supplierId) ?? $ad;
+            if ($submittedValues !== null) {
+                $ad = array_merge($ad, $submittedValues);
+                $ad['category_id'] = $submittedValues['category_id'] === ''
+                    ? null
+                    : (int)$submittedValues['category_id'];
+            }
         }
 
         $status = strtoupper((string)$ad['status']);

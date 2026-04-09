@@ -26,15 +26,15 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <div>
             <label>Name</label><br>
-            <input name="name" required>
+            <input name="name" required maxlength="100">
         </div>
         <div>
             <label>Price per ad</label><br>
-            <input name="price_per_ad" value="500.00" required>
+            <input type="number" name="price_per_ad" min="0.01" step="0.01" value="500.00" required>
         </div>
         <div>
             <label>VAT rate</label><br>
-            <input name="vat_rate" value="25.00" required>
+            <input type="number" name="vat_rate" min="0" max="100" step="0.01" value="25.00" required>
         </div>
         <div>
             <label>Currency</label><br>
@@ -51,7 +51,7 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
     </div>
     <div style="margin-top:10px;">
         <label>Description</label><br>
-        <input name="description" style="width:520px;">
+        <input name="description" maxlength="255" style="width:520px;">
     </div>
     <div style="margin-top:10px;">
         <label><input type="checkbox" name="is_active" value="1" checked> Active</label>
@@ -70,15 +70,15 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
             <div style="display:flex;gap:12px;flex-wrap:wrap;">
                 <div>
                     <label>Name</label><br>
-                    <input name="name" value="<?= h((string)$row['name']) ?>">
+                    <input name="name" required maxlength="100" value="<?= h((string)$row['name']) ?>">
                 </div>
                 <div>
                     <label>Price per ad</label><br>
-                    <input name="price_per_ad" value="<?= h($money($row['price_per_ad'])) ?>">
+                    <input type="number" name="price_per_ad" min="0.01" step="0.01" value="<?= h($money($row['price_per_ad'])) ?>">
                 </div>
                 <div>
                     <label>VAT rate</label><br>
-                    <input name="vat_rate" value="<?= h($money($row['vat_rate'])) ?>">
+                    <input type="number" name="vat_rate" min="0" max="100" step="0.01" value="<?= h($money($row['vat_rate'])) ?>">
                 </div>
                 <div>
                     <label>Currency</label><br>
@@ -95,14 +95,14 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
             </div>
             <div style="margin-top:10px;">
                 <label>Description</label><br>
-                <input name="description" value="<?= h((string)($row['description'] ?? '')) ?>" style="width:520px;">
+                <input name="description" maxlength="255" value="<?= h((string)($row['description'] ?? '')) ?>" style="width:520px;">
             </div>
             <div style="margin-top:10px;">
                 <label><input type="checkbox" name="is_active" value="1" <?= !empty($row['is_active']) ? 'checked' : '' ?>> Active</label>
             </div>
             <div style="margin-top:10px;">
                 <button type="submit" name="action" value="update">Save changes</button>
-                <button type="submit" name="action" value="deactivate" onclick="return confirm('Deactivate this pricing rule?');">Deactivate</button>
+                <button type="submit" name="action" value="deactivate" data-confirm="Deactivate this pricing rule?">Deactivate</button>
             </div>
             <p style="margin:10px 0 0;opacity:.8;">
                 ID <?= (int)$row['id'] ?>, created <?= h((string)$row['created_at']) ?>, updated <?= h((string)$row['updated_at']) ?>

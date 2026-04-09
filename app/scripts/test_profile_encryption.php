@@ -32,14 +32,19 @@ $config = require $configPath;
 $db = new Database($config);
 $pdo = $db->pdo();
 
+$configuredKeys = array_filter(
+    (array)(($config['crypto'] ?? [])['keys'] ?? []),
+    static fn(mixed $value): bool => trim((string)$value) !== ''
+);
+$testKeyId = 'test-v1';
 $keyV1 = base64_encode(random_bytes(32));
 $keyV2 = base64_encode(random_bytes(32));
+$cryptoKeys = $configuredKeys;
+$cryptoKeys[$testKeyId] = $keyV1;
 $crypto = new Crypto([
     'enabled' => true,
-    'active_key_id' => 'v1',
-    'keys' => [
-        'v1' => $keyV1,
-    ],
+    'active_key_id' => $testKeyId,
+    'keys' => $cryptoKeys,
 ]);
 
 $service = new SupplierService($pdo, $crypto);
@@ -50,6 +55,8 @@ $supplierId = null;
 $supplierUuid = 'TST-SUP-' . bin2hex(random_bytes(8));
 $addressUuid = 'TST-ADR-' . bin2hex(random_bytes(8));
 $personUuid = 'TST-PER-' . bin2hex(random_bytes(8));
+$exitCode = 0;
+$fatalError = null;
 
 try {
     $cipher = $crypto->encryptString('supplier@example.test', SupplierProfileEncryptionMap::SUPPLIERS['email']);
@@ -70,10 +77,10 @@ try {
 
     $wrongKeyCrypto = new Crypto([
         'enabled' => true,
-        'active_key_id' => 'v1',
-        'keys' => [
-            'v1' => $keyV2,
-        ],
+        'active_key_id' => $testKeyId,
+        'keys' => array_merge($configuredKeys, [
+            $testKeyId => $keyV2,
+        ]),
     ]);
     assertThrows(
         static fn() => $wrongKeyCrypto->decryptString($cipher, SupplierProfileEncryptionMap::SUPPLIERS['email']),
@@ -84,9 +91,9 @@ try {
     $missingKeyCrypto = new Crypto([
         'enabled' => true,
         'active_key_id' => 'v2',
-        'keys' => [
+        'keys' => array_merge($configuredKeys, [
             'v2' => $keyV2,
-        ],
+        ]),
     ]);
     assertThrows(
         static fn() => $missingKeyCrypto->decryptString($cipher, SupplierProfileEncryptionMap::SUPPLIERS['email']),
@@ -327,12 +334,13 @@ try {
 
     foreach ($checks as $check) {
         if (!$check['pass']) {
-            exit(1);
+            $exitCode = 1;
+            break;
         }
     }
 } catch (Throwable $e) {
-    fwrite(STDERR, '[ERROR] ' . $e->getMessage() . PHP_EOL);
-    exit(1);
+    $fatalError = $e->getMessage();
+    $exitCode = 1;
 } finally {
     if ($supplierId !== null) {
         $pdo->prepare("DELETE FROM phones_entities WHERE entity_name = 'SUPPLIER' AND uuid_entity = :uuid")->execute([':uuid' => $supplierUuid]);
@@ -345,6 +353,12 @@ try {
         $pdo->prepare("DELETE FROM addresses WHERE uuid_address = :uuid")->execute([':uuid' => $addressUuid]);
     }
 }
+
+if ($fatalError !== null) {
+    fwrite(STDERR, '[ERROR] ' . $fatalError . PHP_EOL);
+}
+
+exit($exitCode);
 
 function assertSameValue(mixed $expected, mixed $actual, string $label, array &$checks): void
 {

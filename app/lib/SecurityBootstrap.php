@@ -17,10 +17,21 @@ final class SecurityBootstrap
             return;
         }
 
+        header_remove('X-Powered-By');
         header('X-Content-Type-Options: nosniff');
         header('Referrer-Policy: no-referrer');
         header('X-Frame-Options: DENY');
         header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+        header('Cross-Origin-Opener-Policy: same-origin');
+        header('Cross-Origin-Resource-Policy: same-origin');
+        header('X-Permitted-Cross-Domain-Policies: none');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+
+        $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+        if ($isHttps) {
+            header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+        }
 
         $csp = implode('; ', [
             "default-src 'self'",
@@ -29,6 +40,8 @@ final class SecurityBootstrap
             "frame-ancestors 'none'",
             "object-src 'none'",
             "img-src 'self' data:",
+            "font-src 'self' data:",
+            "media-src 'self'",
             "style-src 'self' 'unsafe-inline'",
             "script-src 'self'",
             "connect-src 'self'",

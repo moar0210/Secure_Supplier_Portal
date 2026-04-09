@@ -10,7 +10,7 @@
 <form method="post" style="margin-bottom:16px;">
     <?= Csrf::input(); ?>
     <input type="hidden" name="action" value="create">
-    <input name="name" required placeholder="Category name" style="width:320px;">
+    <input name="name" required maxlength="100" placeholder="Category name" style="width:320px;">
     <button type="submit">Create</button>
 </form>
 
@@ -35,7 +35,7 @@
                     <td>
                         <a href="?page=admin_category_edit&id=<?= (int)$category['id'] ?>">Rename</a>
 
-                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete this category?');">
+                        <form method="post" style="display:inline;" data-confirm="Delete this category?">
                             <?= Csrf::input(); ?>
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="id" value="<?= (int)$category['id'] ?>">

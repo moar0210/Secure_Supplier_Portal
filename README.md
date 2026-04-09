@@ -110,6 +110,7 @@ Run the new migrations after the previous ones:
 ```powershell
 C:\xampp\mysql\bin\mysql.exe -u YOUR_DB_USER -p YOUR_DB_NAME < database\migrations\005_profile_encryption.sql
 C:\xampp\mysql\bin\mysql.exe -u YOUR_DB_USER -p YOUR_DB_NAME < database\migrations\006_invoicing.sql
+C:\xampp\mysql\bin\mysql.exe -u YOUR_DB_USER -p YOUR_DB_NAME < database\migrations\007_supplier_logos.sql
 ```
 
 What the migrations do:
@@ -119,6 +120,7 @@ What the migrations do:
 - Updates generated columns that would otherwise be too small for ciphertext
 - Removes the legacy phone uniqueness index that no longer makes sense with randomized AEAD ciphertext
 - Adds pricing rules, invoices, invoice lines, invoice payments, invoice status history, numbering sequences, and ad activation history
+- Adds supplier logo metadata storage for files kept outside the web root
 
 ## Backfill Existing Plaintext Rows
 
@@ -175,6 +177,25 @@ C:\xampp\php\php.exe -d extension=sodium app\scripts\benchmark_profile_encryptio
 It prints real timings from the current environment, creates temporary supplier-linked benchmark rows, and cleans them up afterward.
 It currently reports wall-clock latency plus memory usage and peak memory.
 CPU-level analysis belongs in the thesis evaluation discussion, not in the runtime app itself.
+
+## Invoicing Verification Script
+
+The invoicing verification script covers:
+
+- monthly draft generation for approved active ads
+- idempotent draft regeneration
+- stale draft cleanup when an ad is no longer billable
+- invoice send transition
+- manual payment recording
+- PDF generation
+
+Run:
+
+```powershell
+C:\xampp\php\php.exe app\scripts\test_invoicing.php
+```
+
+The script creates temporary users, supplier data, ads, pricing rules, invoices, and status history rows, then cleans everything up afterward.
 
 ## Admin Security Check
 

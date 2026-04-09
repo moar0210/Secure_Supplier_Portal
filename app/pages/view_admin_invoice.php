@@ -124,15 +124,15 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
         <input type="hidden" name="action" value="record_payment">
         <div style="margin:10px 0;">
             <label>Amount</label><br>
-            <input name="amount" value="<?= h($money($invoice['total_amount'])) ?>">
+            <input type="number" name="amount" min="0" step="0.01" required value="<?= h($money($invoice['total_amount'])) ?>">
         </div>
         <div style="margin:10px 0;">
             <label>Payment date</label><br>
-            <input type="date" name="payment_date" value="<?= h(date('Y-m-d')) ?>">
+            <input type="date" name="payment_date" required value="<?= h(date('Y-m-d')) ?>">
         </div>
         <div style="margin:10px 0;">
             <label>Method</label><br>
-            <input name="payment_method" placeholder="Bank transfer">
+            <input name="payment_method" required maxlength="100" placeholder="Bank transfer">
         </div>
         <button type="submit">Record payment</button>
     </form>

@@ -66,7 +66,7 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
         </div>
         <div>
             <label>Supplier ID</label><br>
-            <input name="supplier_id" value="<?= h((string)($filters['supplier_id'] ?? '')) ?>">
+            <input type="number" name="supplier_id" min="1" step="1" value="<?= h((string)($filters['supplier_id'] ?? '')) ?>">
         </div>
         <div>
             <label>Invoice number</label><br>

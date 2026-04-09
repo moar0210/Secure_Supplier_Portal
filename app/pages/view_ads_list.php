@@ -73,10 +73,10 @@ $badge = static function (string $status): string {
                                 <input type="hidden" name="action" value="submit">
                                 <button type="submit">Submit</button>
                             </form>
-                            <form method="post" action="?page=ad_delete" style="display:inline;">
+                            <form method="post" action="?page=ad_delete" style="display:inline;" data-confirm="Delete this ad?">
                                 <?= Csrf::input(); ?>
                                 <input type="hidden" name="id" value="<?= $id ?>">
-                                <button type="submit" onclick="return confirm('Delete this ad?');">Delete</button>
+                                <button type="submit">Delete</button>
                             </form>
                         <?php else: ?>
                             <span style="opacity:.8;">(Waiting review)</span>

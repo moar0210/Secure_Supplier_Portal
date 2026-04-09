@@ -6,6 +6,7 @@ final class SupplierService
 {
     private const EMPTY_UUID = 'EMPTY';
     private const MAX_LOGO_BYTES = 2097152;
+    private const MAX_LOGO_FILENAME_LENGTH = 255;
     /** @var array<string, string> */
     private const LOGO_MIME_TYPES = [
         'image/jpeg' => 'jpg',
@@ -187,14 +188,20 @@ final class SupplierService
             return null;
         }
 
+        $mimeType = trim(strtolower((string)($logo['mime_type'] ?? '')));
+        $extension = $this->logoExtensionForMime($mimeType);
+        if ($extension === null) {
+            return null;
+        }
+
         $path = $this->logoPath((string)$logo['stored_filename']);
         if (!is_file($path)) {
             return null;
         }
 
-        $extension = pathinfo((string)$logo['stored_filename'], PATHINFO_EXTENSION);
+        $logo['mime_type'] = $mimeType;
         $logo['path'] = $path;
-        $logo['download_name'] = 'supplier-logo-' . $supplierId . ($extension === '' ? '' : '.' . $extension);
+        $logo['download_name'] = 'supplier-logo-' . $supplierId . '.' . $extension;
 
         return $logo;
     }
@@ -1173,8 +1180,8 @@ final class SupplierService
             throw new UserFacingException('Logo upload must be a valid image file.');
         }
 
-        $mimeType = (string)($imageInfo['mime'] ?? '');
-        $extension = self::LOGO_MIME_TYPES[$mimeType] ?? null;
+        $mimeType = trim(strtolower((string)($imageInfo['mime'] ?? '')));
+        $extension = $this->logoExtensionForMime($mimeType);
         if ($extension === null) {
             throw new UserFacingException('Logo upload must be a PNG, JPG, or WebP image.');
         }
@@ -1217,9 +1224,27 @@ final class SupplierService
     {
         $filename = trim(basename($filename));
         $filename = preg_replace('/[^A-Za-z0-9._-]+/', '_', $filename) ?? '';
+        $filename = trim($filename, '._-');
 
         if ($filename === '' || $filename === '.' || $filename === '..') {
             return 'supplier-logo.' . $extension;
+        }
+
+        $baseName = trim((string)(pathinfo($filename, PATHINFO_FILENAME) ?: $filename), '._-');
+        if ($baseName === '') {
+            $baseName = 'supplier-logo';
+        }
+
+        $filename = $baseName . '.' . $extension;
+
+        if (strlen($filename) > self::MAX_LOGO_FILENAME_LENGTH) {
+            $maxBaseLength = max(1, self::MAX_LOGO_FILENAME_LENGTH - strlen($extension) - 1);
+            $baseName = rtrim(substr($baseName, 0, $maxBaseLength), '._-');
+            if ($baseName === '') {
+                $baseName = 'supplier-logo';
+            }
+
+            $filename = $baseName . '.' . $extension;
         }
 
         return $filename;
@@ -1298,13 +1323,18 @@ final class SupplierService
         $abbrParts = array_filter([$firstName, $lastName], static fn(string $part): bool => $part !== '');
         $abbreviation = '';
         foreach ($abbrParts as $part) {
-            $abbreviation .= strtoupper(substr($part, 0, 1));
+            $abbreviation .= mb_strtoupper(mb_substr($part, 0, 1, 'UTF-8'), 'UTF-8');
         }
         if ($abbreviation === '') {
             $abbreviation = 'CP';
         }
 
-        return [$firstName, $lastName, $fullName, substr($abbreviation, 0, 20)];
+        return [$firstName, $lastName, $fullName, mb_substr($abbreviation, 0, 20, 'UTF-8')];
+    }
+
+    private function logoExtensionForMime(string $mimeType): ?string
+    {
+        return self::LOGO_MIME_TYPES[$mimeType] ?? null;
     }
 
     private function digitsOnly(string $value): string

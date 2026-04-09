@@ -11,12 +11,12 @@
 
     <div style="margin:10px 0;">
         <label>Title</label><br>
-        <input name="title" required style="width:520px;" value="<?= h($form['title']) ?>">
+        <input name="title" required maxlength="200" style="width:520px;" value="<?= h($form['title']) ?>">
     </div>
 
     <div style="margin:10px 0;">
         <label>Description</label><br>
-        <textarea name="description" required rows="6" style="width:520px;"><?= h($form['description']) ?></textarea>
+        <textarea name="description" required maxlength="5000" rows="6" style="width:520px;"><?= h($form['description']) ?></textarea>
     </div>
 
     <div style="margin:10px 0;">
@@ -34,17 +34,17 @@
 
     <div style="margin:10px 0;">
         <label>Price text</label><br>
-        <input name="price_text" style="width:520px;" value="<?= h($form['price_text']) ?>">
+        <input name="price_text" maxlength="200" style="width:520px;" value="<?= h($form['price_text']) ?>">
     </div>
 
     <div style="margin:10px 0;">
         <label>Valid from</label><br>
-        <input name="valid_from" placeholder="YYYY-MM-DD" value="<?= h($form['valid_from']) ?>">
+        <input type="date" name="valid_from" value="<?= h($form['valid_from']) ?>">
     </div>
 
     <div style="margin:10px 0;">
         <label>Valid to</label><br>
-        <input name="valid_to" placeholder="YYYY-MM-DD" value="<?= h($form['valid_to']) ?>">
+        <input type="date" name="valid_to" value="<?= h($form['valid_to']) ?>">
     </div>
 
     <div style="margin-top:14px;">

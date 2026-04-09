@@ -191,6 +191,7 @@ final class InvoiceService
             'eligible_ads' => 0,
             'created' => 0,
             'updated' => 0,
+            'removed' => 0,
             'skipped' => 0,
             'failed' => 0,
             'errors' => [],
@@ -229,6 +230,12 @@ final class InvoiceService
                 );
             }
         }
+
+        $result['removed'] = $this->removeStaleDraftInvoicesForMonth(
+            $year,
+            $month,
+            array_map('intval', array_keys($eligibleBySupplier))
+        );
 
         return $result;
     }
@@ -365,6 +372,16 @@ final class InvoiceService
 
             if ($this->hasPaymentRecord($invoiceId)) {
                 throw new UserFacingException('A payment has already been recorded for this invoice.');
+            }
+
+            $today = (new DateTimeImmutable('today'))->format('Y-m-d');
+            if ($paymentDate > $today) {
+                throw new UserFacingException('Payment date cannot be in the future.');
+            }
+
+            $issueDate = trim((string)($invoice['issue_date'] ?? ''));
+            if ($issueDate !== '' && $paymentDate < $issueDate) {
+                throw new UserFacingException('Payment date cannot be earlier than the invoice issue date.');
             }
 
             $expectedAmount = round((float)$invoice['total_amount'], 2);
@@ -541,8 +558,10 @@ final class InvoiceService
         $pdf->setPrintFooter(false);
         $pdf->SetMargins(15, 15, 15);
         $pdf->SetAutoPageBreak(true, 15);
+        $pdf->setFontSubsetting(true);
         $pdf->AddPage();
-        $pdf->SetFont('helvetica', '', 10);
+        // DejaVu Sans is bundled with TCPDF and renders UTF-8 invoice content reliably.
+        $pdf->SetFont('dejavusans', '', 10);
         $pdf->writeHTML($this->buildInvoicePdfHtml($invoice), true, false, true, false, '');
 
         return (string)$pdf->Output($this->downloadFilename($invoice), 'S');
@@ -550,7 +569,10 @@ final class InvoiceService
 
     public function downloadFilename(array $invoice): string
     {
-        return preg_replace('/[^A-Za-z0-9._-]+/', '_', (string)$invoice['invoice_number']) . '.pdf';
+        $base = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string)$invoice['invoice_number']) ?? '';
+        $base = trim($base, '._-');
+
+        return ($base === '' ? 'invoice' : $base) . '.pdf';
     }
 
     private function attachInvoiceDetail(array $invoice): array
@@ -1321,6 +1343,38 @@ final class InvoiceService
         $stmt->execute([':id' => $ruleId]);
 
         return (bool)$stmt->fetchColumn();
+    }
+
+    private function removeStaleDraftInvoicesForMonth(int $year, int $month, array $eligibleSupplierIds): int
+    {
+        $params = [
+            ':billing_year' => $year,
+            ':billing_month' => $month,
+            ':status' => self::STATUS_DRAFT,
+        ];
+
+        $sql = "
+            DELETE FROM invoices
+            WHERE billing_year = :billing_year
+              AND billing_month = :billing_month
+              AND status = :status
+        ";
+
+        if ($eligibleSupplierIds !== []) {
+            $placeholders = [];
+            foreach (array_values($eligibleSupplierIds) as $index => $supplierId) {
+                $placeholder = ':supplier_' . $index;
+                $placeholders[] = $placeholder;
+                $params[$placeholder] = (int)$supplierId;
+            }
+
+            $sql .= ' AND supplier_id NOT IN (' . implode(', ', $placeholders) . ')';
+        }
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->rowCount();
     }
 
     private function decryptInvoiceRow(array $row): array

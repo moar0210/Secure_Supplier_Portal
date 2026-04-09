@@ -24,12 +24,12 @@
 
     <div style="margin:10px 0;">
         <label>Title</label><br>
-        <input name="title" required style="width:520px;" value="<?= h((string)$ad['title']) ?>" <?= $isLocked ? 'disabled' : '' ?>>
+        <input name="title" required maxlength="200" style="width:520px;" value="<?= h((string)$ad['title']) ?>" <?= $isLocked ? 'disabled' : '' ?>>
     </div>
 
     <div style="margin:10px 0;">
         <label>Description</label><br>
-        <textarea name="description" required rows="6" style="width:520px;" <?= $isLocked ? 'disabled' : '' ?>><?= h((string)$ad['description']) ?></textarea>
+        <textarea name="description" required maxlength="5000" rows="6" style="width:520px;" <?= $isLocked ? 'disabled' : '' ?>><?= h((string)$ad['description']) ?></textarea>
     </div>
 
     <div style="margin:10px 0;">
@@ -47,27 +47,23 @@
 
     <div style="margin:10px 0;">
         <label>Price text</label><br>
-        <input name="price_text" style="width:520px;" value="<?= h((string)($ad['price_text'] ?? '')) ?>" <?= $isLocked ? 'disabled' : '' ?>>
+        <input name="price_text" maxlength="200" style="width:520px;" value="<?= h((string)($ad['price_text'] ?? '')) ?>" <?= $isLocked ? 'disabled' : '' ?>>
     </div>
 
     <div style="margin:10px 0;">
         <label>Valid from</label><br>
-        <input name="valid_from" placeholder="YYYY-MM-DD" value="<?= h((string)($ad['valid_from'] ?? '')) ?>" <?= $isLocked ? 'disabled' : '' ?>>
+        <input type="date" name="valid_from" value="<?= h((string)($ad['valid_from'] ?? '')) ?>" <?= $isLocked ? 'disabled' : '' ?>>
     </div>
 
     <div style="margin:10px 0;">
         <label>Valid to</label><br>
-        <input name="valid_to" placeholder="YYYY-MM-DD" value="<?= h((string)($ad['valid_to'] ?? '')) ?>" <?= $isLocked ? 'disabled' : '' ?>>
+        <input type="date" name="valid_to" value="<?= h((string)($ad['valid_to'] ?? '')) ?>" <?= $isLocked ? 'disabled' : '' ?>>
     </div>
 
     <div style="margin-top:14px;">
         <?php if (!$isLocked): ?>
             <button type="submit" name="action" value="save_draft">Save (Draft)</button>
             <button type="submit" name="action" value="save_submit">Save + Submit</button>
-        <?php endif; ?>
-
-        <?php if (in_array($status, ['DRAFT', 'REJECTED'], true)): ?>
-            <button type="submit" name="action" value="submit">Submit</button>
         <?php endif; ?>
 
         <a href="?page=ads_list" style="margin-left:10px;">Back</a>

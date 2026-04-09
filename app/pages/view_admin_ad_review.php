@@ -67,7 +67,7 @@
         <input type="hidden" name="decision" value="reject">
         <div>
             <label>Rejection reason (required)</label><br>
-            <input name="reason" required style="width:420px;">
+            <input name="reason" required maxlength="500" style="width:420px;">
         </div>
         <button type="submit">Reject</button>
     </form>

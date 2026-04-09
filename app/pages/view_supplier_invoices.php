@@ -13,6 +13,12 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
 ?>
 <h1>My Invoices</h1>
 
+<?php if (!empty($error)): ?>
+    <div style="padding:8px;border:1px solid #a00;background:#fee;margin-bottom:12px;">
+        <?= h((string)$error) ?>
+    </div>
+<?php endif; ?>
+
 <form method="get" style="margin-bottom:18px;padding:12px;border:1px solid #ccc;">
     <input type="hidden" name="page" value="supplier_invoices">
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
