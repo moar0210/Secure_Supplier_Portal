@@ -15,6 +15,7 @@ $config = require $configPath;
 
 require $root . '/app/lib/Database.php';
 require $root . '/app/lib/UserFacingException.php';
+require $root . '/app/lib/PortalLogger.php';
 require $root . '/app/lib/Crypto.php';
 require $root . '/app/lib/SupplierProfileEncryptionMap.php';
 require $root . '/app/lib/SupplierService.php';

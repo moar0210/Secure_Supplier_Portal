@@ -1,3 +1,4 @@
+<?php $priceModels = AdsService::priceModelOptions(); ?>
 <h1>Create Ad</h1>
 
 <?php if ($error): ?>
@@ -33,7 +34,19 @@
     </div>
 
     <div style="margin:10px 0;">
-        <label>Price text</label><br>
+        <label>Price model</label><br>
+        <select name="price_model_type" style="width:520px;">
+            <option value="">Select a model</option>
+            <?php foreach ($priceModels as $value => $label): ?>
+                <option value="<?= h($value) ?>" <?= $form['price_model_type'] === $value ? 'selected' : '' ?>>
+                    <?= h($label) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+
+    <div style="margin:10px 0;">
+        <label>Offer details</label><br>
         <input name="price_text" maxlength="200" style="width:520px;" value="<?= h($form['price_text']) ?>">
     </div>
 

@@ -5,14 +5,26 @@
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:20px;">
     <div style="border:1px solid #ccc;padding:16px;background:#fafafa;">
         <h2 style="margin-top:0;">Suppliers</h2>
-        <p>Review supplier records and verify profile data before billing and approvals.</p>
+        <p>Create suppliers, review their profile data, and activate or deactivate supplier accounts before billing and approvals.</p>
         <a href="?page=suppliers">Open supplier list</a>
+    </div>
+
+    <div style="border:1px solid #ccc;padding:16px;background:#fafafa;">
+        <h2 style="margin-top:0;">Users</h2>
+        <p>Manage portal users, assign roles, and link supplier users to the correct company account.</p>
+        <a href="?page=admin_users">Manage users</a>
     </div>
 
     <div style="border:1px solid #ccc;padding:16px;background:#fafafa;">
         <h2 style="margin-top:0;">Ads Queue</h2>
         <p>Approve or reject supplier advertisements and inspect the status history for each listing.</p>
         <a href="?page=admin_ads_queue">Review advertisements</a>
+    </div>
+
+    <div style="border:1px solid #ccc;padding:16px;background:#fafafa;">
+        <h2 style="margin-top:0;">Reports</h2>
+        <p>Review platform-wide supplier, user, listing, invoice, and visibility statistics with recent activity logs.</p>
+        <a href="?page=admin_reports">Open reports</a>
     </div>
 
     <div style="border:1px solid #ccc;padding:16px;background:#fafafa;">

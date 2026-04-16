@@ -71,11 +71,14 @@
 
         <nav style="display:inline-block; margin-left:16px;">
             <a href="?page=home">Home</a>
+            <a href="?page=marketplace">Marketplace</a>
 
             <?php if ($auth instanceof Auth && $auth->hasRole('ADMIN')): ?>
                 <a href="?page=dbtest">DB Test</a>
                 <a href="?page=suppliers">Suppliers</a>
+                <a href="?page=admin_users">Users</a>
                 <a href="?page=admin_ads_queue">Ads Queue</a>
+                <a href="?page=admin_reports">Reports</a>
                 <a href="?page=admin_invoices">Invoices</a>
                 <a href="?page=admin_pricing_rules">Pricing Rules</a>
                 <a href="?page=admin_categories">Categories</a>
@@ -85,11 +88,15 @@
                 <?php $sid = $auth->supplierId(); ?>
                 <?php if ($sid !== null): ?>
                     <a href="?page=supplier&id=<?= (int)$sid ?>">My Profile</a>
+                    <a href="?page=supplier_users">Company Users</a>
                     <a href="?page=ads_list">My Ads</a>
+                    <a href="?page=supplier_stats">Statistics</a>
                     <a href="?page=supplier_invoices">My Invoices</a>
                 <?php else: ?>
                     <span style="opacity:.8;">My Profile (unlinked)</span>
+                    <span style="opacity:.8;">Company Users (unlinked)</span>
                     <span style="opacity:.8;">My Ads (unlinked)</span>
+                    <span style="opacity:.8;">Statistics (unlinked)</span>
                     <span style="opacity:.8;">My Invoices (unlinked)</span>
                 <?php endif; ?>
             <?php endif; ?>

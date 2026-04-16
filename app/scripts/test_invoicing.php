@@ -56,7 +56,7 @@ try {
     );
 
     $currentRun = $invoiceService->generateMonthlyInvoices($currentBillingMonth, $actorUserId);
-    assertSameValue(1, $currentRun['created'] ?? null, 'current-month generation creates one draft invoice', $checks);
+    assertTrueValue(((int)($currentRun['created'] ?? 0)) >= 1, 'current-month generation creates a draft invoice for the verification run', $checks);
 
     $currentInvoice = findInvoiceForSupplierMonth($invoiceService, $fixture['supplier_id'], $currentBillingMonth);
     assertTrueValue(is_array($currentInvoice), 'current-month draft invoice can be loaded for the supplier/month', $checks);
@@ -66,9 +66,10 @@ try {
     }
 
     assertSameValue(InvoiceService::STATUS_DRAFT, $currentInvoice['status'] ?? null, 'current-month invoice starts as DRAFT', $checks);
-    assertSameValue(1, count((array)($currentInvoice['lines'] ?? [])), 'current-month draft contains one invoice line', $checks);
-    assertSameValue('Visibility Package A', $currentInvoice['lines'][0]['ad_title'] ?? null, 'current-month invoice line keeps the advertisement title', $checks);
-    assertSameValue('321.00', number_format((float)($currentInvoice['total_amount'] ?? 0), 2, '.', ''), 'current-month total matches the configured price + VAT', $checks);
+    assertSameValue(3, count((array)($currentInvoice['lines'] ?? [])), 'current-month draft contains recurring and advertisement invoice lines', $checks);
+    assertSameValue('Monthly subscription', $currentInvoice['lines'][0]['ad_title'] ?? null, 'current-month invoice starts with the subscription line', $checks);
+    assertSameValue('Visibility Package A', $currentInvoice['lines'][2]['ad_title'] ?? null, 'current-month invoice keeps the advertisement title', $checks);
+    assertSameValue('946.00', number_format((float)($currentInvoice['total_amount'] ?? 0), 2, '.', ''), 'current-month total matches subscription, service fee, ad usage, and VAT', $checks);
 
     $futureRun = $invoiceService->generateMonthlyInvoices($nextBillingMonth, $actorUserId);
     $futureInvoice = findInvoiceForSupplierMonth($invoiceService, $fixture['supplier_id'], $nextBillingMonth);
@@ -81,13 +82,17 @@ try {
     deactivateApprovedAd($pdo, $futureAdId, $actorUserId);
 
     $thirdFutureRun = $invoiceService->generateMonthlyInvoices($nextBillingMonth, $actorUserId);
-    assertSameValue(1, $thirdFutureRun['removed'] ?? null, 'future draft invoices are removed when no ads remain billable for that month', $checks);
-    assertSameValue(null, findInvoiceForSupplierMonth($invoiceService, $fixture['supplier_id'], $nextBillingMonth), 'stale future draft invoice is no longer present after cleanup', $checks);
+    assertSameValue(0, $thirdFutureRun['removed'] ?? null, 'future draft invoice stays available when recurring fixed fees still apply', $checks);
+    $futureInvoiceWithoutAd = findInvoiceForSupplierMonth($invoiceService, $fixture['supplier_id'], $nextBillingMonth);
+    assertTrueValue(is_array($futureInvoiceWithoutAd), 'future invoice remains available with recurring fixed-fee lines only', $checks);
+    assertSameValue(2, count((array)($futureInvoiceWithoutAd['lines'] ?? [])), 'future invoice drops the ad line when no advertisement remains billable', $checks);
 
     reactivateApprovedAd($pdo, $futureAdId, $actorUserId);
 
     $fourthFutureRun = $invoiceService->generateMonthlyInvoices($nextBillingMonth, $actorUserId);
-    assertSameValue(1, $fourthFutureRun['created'] ?? null, 'future billing can recreate a draft invoice after the ad becomes billable again', $checks);
+    $futureInvoiceAfterReactivation = findInvoiceForSupplierMonth($invoiceService, $fixture['supplier_id'], $nextBillingMonth);
+    assertTrueValue(is_array($futureInvoiceAfterReactivation), 'future invoice is still available after the ad becomes billable again', $checks);
+    assertSameValue(3, count((array)($futureInvoiceAfterReactivation['lines'] ?? [])), 'future invoice adds the advertisement line back after reactivation', $checks);
 
     $currentInvoiceId = (int)$currentInvoice['id'];
     $invoiceService->transitionToSent($currentInvoiceId, $actorUserId);
@@ -121,6 +126,12 @@ try {
     fwrite(STDERR, '[ERROR] ' . $e->getMessage() . PHP_EOL);
     exit(1);
 } finally {
+    if ($actorUserId !== null) {
+        $pdo->prepare('DELETE FROM invoices WHERE generated_by_user_id = :user_id')->execute([
+            ':user_id' => $actorUserId,
+        ]);
+    }
+
     if (is_array($fixture)) {
         $pdo->prepare('DELETE FROM invoices WHERE supplier_id = :supplier_id')->execute([
             ':supplier_id' => $fixture['supplier_id'],
@@ -146,6 +157,12 @@ try {
     }
 
     if ($actorUserId !== null) {
+        $pdo->prepare('DELETE FROM invoice_status_history WHERE changed_by_user_id = :user_id')->execute([
+            ':user_id' => $actorUserId,
+        ]);
+        $pdo->prepare('DELETE FROM invoice_payments WHERE recorded_by_user_id = :user_id')->execute([
+            ':user_id' => $actorUserId,
+        ]);
         $pdo->prepare('DELETE FROM user_roles WHERE user_id = :user_id')->execute([
             ':user_id' => $actorUserId,
         ]);
@@ -200,6 +217,9 @@ function createTemporaryPricingRule(PDO $pdo, DateTimeImmutable $periodStart): i
             name,
             description,
             price_per_ad,
+            subscription_fee,
+            optional_service_fee,
+            service_fee_label,
             currency_code,
             vat_rate,
             effective_from,
@@ -209,6 +229,9 @@ function createTemporaryPricingRule(PDO $pdo, DateTimeImmutable $periodStart): i
             :name,
             :description,
             :price_per_ad,
+            :subscription_fee,
+            :optional_service_fee,
+            :service_fee_label,
             'SEK',
             25.00,
             :effective_from,
@@ -220,6 +243,9 @@ function createTemporaryPricingRule(PDO $pdo, DateTimeImmutable $periodStart): i
         ':name' => 'Invoice Verification Rule ' . bin2hex(random_bytes(4)),
         ':description' => 'Temporary pricing rule for invoicing verification.',
         ':price_per_ad' => '256.80',
+        ':subscription_fee' => '300.00',
+        ':optional_service_fee' => '200.00',
+        ':service_fee_label' => 'Priority onboarding',
         ':effective_from' => $periodStart->format('Y-m-d'),
     ]);
 
@@ -362,6 +388,7 @@ function createApprovedActiveAd(PDO $pdo, int $supplierId, int $actorUserId, str
             category_id,
             title,
             description,
+            price_model_type,
             price_text,
             valid_from,
             valid_to,
@@ -375,6 +402,7 @@ function createApprovedActiveAd(PDO $pdo, int $supplierId, int $actorUserId, str
             NULL,
             :title,
             :description,
+            'FIXED_DISCOUNT',
             :price_text,
             :valid_from,
             :valid_to,

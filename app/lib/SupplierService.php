@@ -29,8 +29,25 @@ final class SupplierService
         $limit = max(1, min($limit, 200));
 
         $stmt = $this->pdo->prepare("
-            SELECT id_supplier, supplier_name, short_name, email, homepage, is_inactive
-            FROM suppliers
+            SELECT
+                s.id_supplier,
+                s.uuid_supplier,
+                s.supplier_name,
+                s.short_name,
+                s.email,
+                s.homepage,
+                s.is_inactive,
+                (
+                    SELECT COUNT(*)
+                    FROM portal_users pu
+                    WHERE pu.supplier_id = s.id_supplier
+                ) AS portal_user_count,
+                (
+                    SELECT COUNT(*)
+                    FROM ads a
+                    WHERE a.supplier_id = s.id_supplier
+                ) AS ad_count
+            FROM suppliers s
             ORDER BY id_supplier ASC
             LIMIT :limit
         ");
@@ -49,6 +66,25 @@ final class SupplierService
         return $rows;
     }
 
+    public function listSupplierOptions(bool $includeInactive = true): array
+    {
+        $sql = "
+            SELECT id_supplier, supplier_name, short_name, is_inactive
+            FROM suppliers
+        ";
+
+        if (!$includeInactive) {
+            $sql .= ' WHERE is_inactive = 0';
+        }
+
+        $sql .= ' ORDER BY supplier_name ASC, id_supplier ASC';
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute();
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
     public function getProfile(int $supplierId): ?array
     {
         $supplier = $this->getSupplierRow($supplierId);
@@ -64,6 +100,7 @@ final class SupplierService
         return [
             'id_supplier' => (int)$supplier['id_supplier'],
             'uuid_supplier' => (string)$supplier['uuid_supplier'],
+            'is_inactive' => (int)$supplier['is_inactive'],
             'company_name' => (string)$supplier['supplier_name'],
             'short_name' => (string)$supplier['short_name'],
             'contact_person' => $this->contactDisplayName($contact),
@@ -81,6 +118,124 @@ final class SupplierService
             'phone_number' => $phone === null ? '' : (string)$phone['phone_number'],
             'phone_display' => $phone === null ? '' : $this->formatPhoneDisplay($phone),
         ];
+    }
+
+    public function createSupplier(
+        array $input,
+        ?array $logoUpload = null,
+        ?int $actorUserId = null
+    ): int
+    {
+        if ($actorUserId === null || $actorUserId < 1) {
+            throw new RuntimeException('A valid actor user id is required to create a supplier.');
+        }
+
+        $clean = $this->validateProfileData($input, [
+            'country_code_ISO2' => strtoupper(trim((string)($input['country_code'] ?? 'SE'))),
+        ]);
+
+        $hasLogoUpload = is_array($logoUpload)
+            && (int)($logoUpload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+
+        if ($hasLogoUpload && !$this->logoTableAvailable()) {
+            throw new UserFacingException('Logo storage is not ready yet. Apply database migration 007_supplier_logos.sql first.');
+        }
+
+        $pendingLogo = $hasLogoUpload ? $this->prepareLogoUpload($logoUpload) : null;
+        $supplierUuid = $this->newUuid();
+        $addressUuid = $this->newUuid();
+        $contactUuid = $this->newUuid();
+
+        $this->pdo->beginTransaction();
+
+        try {
+            $this->insertAddressRow($addressUuid, $clean);
+            $this->insertContactRow($contactUuid, $clean, $addressUuid);
+
+            $stmt = $this->pdo->prepare("
+                INSERT INTO suppliers (
+                    uuid_supplier,
+                    supplier_type,
+                    country_code_ISO2,
+                    uuid_address_main,
+                    uuid_person_contact,
+                    unique_id,
+                    short_name,
+                    supplier_name,
+                    homepage,
+                    email,
+                    is_inactive,
+                    source_info,
+                    time_updated
+                ) VALUES (
+                    :uuid_supplier,
+                    'SUPPLIER',
+                    :country_code,
+                    :uuid_address_main,
+                    :uuid_person_contact,
+                    :unique_id,
+                    :short_name,
+                    :supplier_name,
+                    :homepage,
+                    :email,
+                    1,
+                    'PORTAL',
+                    NOW()
+                )
+            ");
+            $stmt->execute([
+                ':uuid_supplier' => $supplierUuid,
+                ':country_code' => $clean['country_code'],
+                ':uuid_address_main' => $addressUuid,
+                ':uuid_person_contact' => $contactUuid,
+                ':unique_id' => (string)$this->crypto->encryptNullable($clean['vat_number'], SupplierProfileEncryptionMap::SUPPLIERS['unique_id']),
+                ':short_name' => $clean['short_name'],
+                ':supplier_name' => $clean['company_name'],
+                ':homepage' => $clean['homepage'],
+                ':email' => (string)$this->crypto->encryptNullable($clean['email'], SupplierProfileEncryptionMap::SUPPLIERS['email']),
+            ]);
+
+            $supplierId = (int)$this->pdo->lastInsertId();
+
+            $this->ensureAddressLink($supplierUuid, $addressUuid);
+            $this->upsertPhone($supplierUuid, $clean);
+
+            if ($pendingLogo !== null) {
+                $this->upsertLogoRow($supplierId, $pendingLogo, $actorUserId);
+            }
+
+            $this->pdo->commit();
+
+            return $supplierId;
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            if ($pendingLogo !== null) {
+                $this->deleteLogoFileByName((string)$pendingLogo['stored_filename']);
+            }
+
+            throw $e;
+        }
+    }
+
+    public function setSupplierActiveState(int $supplierId, bool $active): void
+    {
+        $stmt = $this->pdo->prepare("
+            UPDATE suppliers
+            SET is_inactive = :is_inactive,
+                time_updated = NOW()
+            WHERE id_supplier = :id
+        ");
+        $stmt->execute([
+            ':is_inactive' => $active ? 0 : 1,
+            ':id' => $supplierId,
+        ]);
+
+        if ($stmt->rowCount() < 1 && $this->getSupplierRow($supplierId) === null) {
+            throw new UserFacingException('Supplier not found.');
+        }
     }
 
     public function updateProfile(
@@ -209,7 +364,7 @@ final class SupplierService
     private function getSupplierRow(int $supplierId): ?array
     {
         $stmt = $this->pdo->prepare("
-            SELECT id_supplier, uuid_supplier, uuid_address_main, uuid_person_contact, supplier_name, short_name, email, homepage, unique_id, country_code_ISO2
+            SELECT id_supplier, uuid_supplier, uuid_address_main, uuid_person_contact, supplier_name, short_name, email, homepage, unique_id, country_code_ISO2, is_inactive
             FROM suppliers
             WHERE id_supplier = :id
             LIMIT 1

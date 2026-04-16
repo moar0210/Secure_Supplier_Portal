@@ -1,5 +1,7 @@
 <h1>Suppliers</h1>
 
+<p><a href="?page=supplier_create">+ Create supplier</a></p>
+
 <?php if (!$rows): ?>
     <p>No suppliers found.</p>
 <?php else: ?>
@@ -11,7 +13,9 @@
                 <th>Short Name</th>
                 <th>Email</th>
                 <th>Homepage</th>
-                <th>Inactive?</th>
+                <th>Status</th>
+                <th>Users</th>
+                <th>Ads</th>
             </tr>
         </thead>
         <tbody>
@@ -27,7 +31,9 @@
                     <td><?= h((string)$row['short_name']) ?></td>
                     <td><?= h((string)$row['email']) ?></td>
                     <td><?= h((string)$row['homepage']) ?></td>
-                    <td><?= h((string)$row['is_inactive']) ?></td>
+                    <td><?= !empty($row['is_inactive']) ? 'Inactive / pending' : 'Active' ?></td>
+                    <td><?= (int)($row['portal_user_count'] ?? 0) ?></td>
+                    <td><?= (int)($row['ad_count'] ?? 0) ?></td>
                 </tr>
             <?php endforeach; ?>
         </tbody>

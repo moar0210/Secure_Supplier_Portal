@@ -1,3 +1,4 @@
+<?php $priceModels = AdsService::priceModelOptions(); ?>
 <h1>Edit Ad #<?= $adId ?></h1>
 
 <p>
@@ -46,7 +47,19 @@
     </div>
 
     <div style="margin:10px 0;">
-        <label>Price text</label><br>
+        <label>Price model</label><br>
+        <select name="price_model_type" style="width:520px;" <?= $isLocked ? 'disabled' : '' ?>>
+            <option value="">Select a model</option>
+            <?php foreach ($priceModels as $value => $label): ?>
+                <option value="<?= h($value) ?>" <?= (string)($ad['price_model_type'] ?? '') === $value ? 'selected' : '' ?>>
+                    <?= h($label) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+
+    <div style="margin:10px 0;">
+        <label>Offer details</label><br>
         <input name="price_text" maxlength="200" style="width:520px;" value="<?= h((string)($ad['price_text'] ?? '')) ?>" <?= $isLocked ? 'disabled' : '' ?>>
     </div>
 

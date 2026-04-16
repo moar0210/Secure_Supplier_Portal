@@ -25,7 +25,11 @@
             <td><?= nl2br(h((string)$ad['description'])) ?></td>
         </tr>
         <tr>
-            <th>Price</th>
+            <th>Price model</th>
+            <td><?= h(AdsService::priceModelLabel((string)($ad['price_model_type'] ?? '')) ?: '-') ?></td>
+        </tr>
+        <tr>
+            <th>Offer details</th>
             <td><?= h((string)($ad['price_text'] ?? '')) ?></td>
         </tr>
         <tr>

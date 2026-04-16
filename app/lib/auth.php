@@ -433,14 +433,6 @@ class Auth
 
     private function logAuthEvent(string $event, array $context = []): void
     {
-        $payload = '';
-        if ($context !== []) {
-            $encoded = json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            if ($encoded !== false) {
-                $payload = ' ' . $encoded;
-            }
-        }
-
-        error_log('[Supplier Portal][AUTH] ' . $event . $payload);
+        PortalLogger::write($this->pdo, 'AUTH', $event, $context);
     }
 }

@@ -1,15 +1,21 @@
 # Supplier Portal Thesis 2026
 
-Lightweight PHP + MariaDB supplier portal built for local/offline-first use. The current implementation uses a simple MVC-ish structure with PDO, role-based access, CSRF protection, supplier profile management, advertisement CRUD, admin review tools, monthly invoicing, PDF export, and manual payment tracking.
+Lightweight PHP + MariaDB supplier portal built for local/offline-first use. The current implementation uses a simple MVC-ish structure with PDO, role-based access, CSRF protection, supplier profile management, supplier/company user management, public marketplace listings, advertisement CRUD, admin approval tools, visibility statistics, admin reporting, monthly invoicing, PDF export, and manual payment tracking.
 
 ## Scope
 
-This repository implements the practical thesis interpretation of profile encryption together with the phase 5 invoicing flow:
+This repository implements the practical thesis interpretation of the supplier portal scope together with selective encryption of sensitive supplier-profile data:
 
 - Sensitive supplier-profile PII is encrypted at rest at the application layer.
-- Auth data, ads, routing, joins, ownership checks, and admin review stay compatible with the existing schema.
+- Auth data, portal users, ads, routing, joins, ownership checks, and admin review stay compatible with the existing schema.
+- Administrators can create suppliers, approve or deactivate suppliers, manage portal users, manage categories, review advertisements, and access platform-wide reports.
+- Suppliers can manage their own company profile, company users, advertisements, visibility statistics, invoices, and invoice PDFs.
+- Public marketplace listings expose approved active ads and feed supplier/admin visibility statistics.
+- Activity and error events are persisted to a database-backed portal activity log for reporting and audit support.
 - Monthly invoices are generated per supplier from approved active ads, with idempotent regeneration for draft invoices.
-- Admin tools include pricing rule management, invoice generation, status transitions, overdue checks, and payment recording.
+- Admin tools include pricing rule management, invoice generation, draft deletion, status transitions, overdue checks, payment recording, and a CLI entrypoint for scheduled monthly billing.
+- Pricing rules can combine recurring subscription fees, advertisement usage fees, and optional service-fee lines in the same monthly invoice.
+- Advertisements support explicit price-model selection such as fixed discount, layer discount, free gift, price list, or custom offer.
 - Suppliers can view only their own invoices and download their own PDFs.
 - This phase does not attempt blanket encryption of every database column in the legacy schema.
 
@@ -111,6 +117,8 @@ Run the new migrations after the previous ones:
 C:\xampp\mysql\bin\mysql.exe -u YOUR_DB_USER -p YOUR_DB_NAME < database\migrations\005_profile_encryption.sql
 C:\xampp\mysql\bin\mysql.exe -u YOUR_DB_USER -p YOUR_DB_NAME < database\migrations\006_invoicing.sql
 C:\xampp\mysql\bin\mysql.exe -u YOUR_DB_USER -p YOUR_DB_NAME < database\migrations\007_supplier_logos.sql
+C:\xampp\mysql\bin\mysql.exe -u YOUR_DB_USER -p YOUR_DB_NAME < database\migrations\008_portal_completion.sql
+C:\xampp\mysql\bin\mysql.exe -u YOUR_DB_USER -p YOUR_DB_NAME < database\migrations\009_pricing_completion.sql
 ```
 
 What the migrations do:
@@ -121,6 +129,21 @@ What the migrations do:
 - Removes the legacy phone uniqueness index that no longer makes sense with randomized AEAD ciphertext
 - Adds pricing rules, invoices, invoice lines, invoice payments, invoice status history, numbering sequences, and ad activation history
 - Adds supplier logo metadata storage for files kept outside the web root
+- Adds portal activity log persistence for audit/reporting screens
+- Adds daily ad visibility aggregation for impressions/clicks dashboards
+- Adds explicit advertisement price-model storage and richer recurring invoice components
+
+## Runtime Features
+
+- Admin supplier list with create, edit, approve/activate, and deactivate flows
+- Admin portal user management for role assignment and supplier linking
+- Supplier company-user management
+- Public marketplace listing and advertisement detail pages
+- Supplier visibility statistics dashboard with date filtering and daily/monthly charts
+- Admin reporting dashboard covering suppliers, users, advertisements, invoices, visibility metrics, and recent activity
+- Monthly invoice generation from the UI and from CLI
+- Draft invoice deletion before sending
+- Subscription fee, advertisement usage, and optional service-fee invoice lines
 
 ## Backfill Existing Plaintext Rows
 
@@ -196,6 +219,40 @@ C:\xampp\php\php.exe app\scripts\test_invoicing.php
 ```
 
 The script creates temporary users, supplier data, ads, pricing rules, invoices, and status history rows, then cleans everything up afterward.
+
+## Portal Completion Verification Script
+
+The portal completion verification script covers:
+
+- supplier creation and approval state changes
+- supplier company-user management
+- admin portal-user management
+- marketplace visibility tracking
+- supplier/admin statistics aggregation
+- portal activity log persistence
+- draft invoice deletion
+
+Run:
+
+```powershell
+C:\xampp\php\php.exe app\scripts\test_portal_completion.php
+```
+
+The script creates temporary suppliers, users, ads, stats, and invoice rows, then cleans them up afterward.
+
+## Monthly Invoice CLI
+
+For scheduled monthly invoice generation outside the web UI:
+
+```powershell
+C:\xampp\php\php.exe app\scripts\generate_monthly_invoices.php 2026-04
+```
+
+Optional second argument:
+
+- Portal admin user id to attribute the generation run to
+
+If the second argument is omitted, the script uses the first active admin account it can find.
 
 ## Admin Security Check
 

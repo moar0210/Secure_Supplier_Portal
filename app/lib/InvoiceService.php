@@ -185,6 +185,9 @@ final class InvoiceService
         }
 
         $eligibleBySupplier = $this->collectBillableAdsBySupplier($periodStart, $periodEnd);
+        if ($this->hasRecurringFixedFees($pricingRule)) {
+            $eligibleBySupplier = $this->mergeActiveSuppliersIntoBillingSet($eligibleBySupplier);
+        }
         $result = [
             'billing_month' => sprintf('%04d-%02d', $year, $month),
             'eligible_suppliers' => count($eligibleBySupplier),
@@ -347,6 +350,41 @@ final class InvoiceService
         }
     }
 
+    public function deleteDraftInvoice(int $invoiceId): void
+    {
+        $this->pdo->beginTransaction();
+
+        try {
+            $invoice = $this->loadInvoiceRowForUpdate($invoiceId);
+            if ($invoice === null) {
+                throw new UserFacingException('Invoice not found.');
+            }
+
+            if ((string)$invoice['status'] !== self::STATUS_DRAFT) {
+                throw new UserFacingException('Only draft invoices can be deleted.');
+            }
+
+            if ($this->hasPaymentRecord($invoiceId)) {
+                throw new UserFacingException('Invoices with a payment record cannot be deleted.');
+            }
+
+            $stmt = $this->pdo->prepare('DELETE FROM invoices WHERE id = :id');
+            $stmt->execute([':id' => $invoiceId]);
+
+            if ($stmt->rowCount() !== 1) {
+                throw new RuntimeException('Unable to delete the invoice.');
+            }
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            throw $e;
+        }
+    }
+
     public function recordPayment(int $invoiceId, array $input, int $actorUserId): void
     {
         $paymentAmount = $this->normalizeMoney($input['amount'] ?? null, 'Payment amount is required.');
@@ -467,6 +505,9 @@ final class InvoiceService
                 name,
                 description,
                 price_per_ad,
+                subscription_fee,
+                optional_service_fee,
+                service_fee_label,
                 currency_code,
                 vat_rate,
                 effective_from,
@@ -476,6 +517,9 @@ final class InvoiceService
                 :name,
                 :description,
                 :price_per_ad,
+                :subscription_fee,
+                :optional_service_fee,
+                :service_fee_label,
                 :currency_code,
                 :vat_rate,
                 :effective_from,
@@ -487,6 +531,9 @@ final class InvoiceService
             ':name' => $clean['name'],
             ':description' => $clean['description'],
             ':price_per_ad' => $clean['price_per_ad'],
+            ':subscription_fee' => $clean['subscription_fee'],
+            ':optional_service_fee' => $clean['optional_service_fee'],
+            ':service_fee_label' => $clean['service_fee_label'],
             ':currency_code' => $clean['currency_code'],
             ':vat_rate' => $clean['vat_rate'],
             ':effective_from' => $clean['effective_from'],
@@ -506,6 +553,9 @@ final class InvoiceService
             SET name = :name,
                 description = :description,
                 price_per_ad = :price_per_ad,
+                subscription_fee = :subscription_fee,
+                optional_service_fee = :optional_service_fee,
+                service_fee_label = :service_fee_label,
                 currency_code = :currency_code,
                 vat_rate = :vat_rate,
                 effective_from = :effective_from,
@@ -518,6 +568,9 @@ final class InvoiceService
             ':name' => $clean['name'],
             ':description' => $clean['description'],
             ':price_per_ad' => $clean['price_per_ad'],
+            ':subscription_fee' => $clean['subscription_fee'],
+            ':optional_service_fee' => $clean['optional_service_fee'],
+            ':service_fee_label' => $clean['service_fee_label'],
             ':currency_code' => $clean['currency_code'],
             ':vat_rate' => $clean['vat_rate'],
             ':effective_from' => $clean['effective_from'],
@@ -627,7 +680,14 @@ final class InvoiceService
             SELECT *
             FROM invoice_lines
             WHERE invoice_id = :invoice_id
-            ORDER BY ad_title ASC, id ASC
+            ORDER BY
+                CASE line_type
+                    WHEN 'SUBSCRIPTION' THEN 1
+                    WHEN 'SERVICE' THEN 2
+                    ELSE 3
+                END,
+                ad_title ASC,
+                id ASC
         ");
         $stmt->execute([':invoice_id' => $invoiceId]);
 
@@ -794,7 +854,7 @@ final class InvoiceService
                 $action = 'updated';
             }
 
-            $this->syncInvoiceLines($invoiceId, $ads, $pricingRule);
+            $this->syncInvoiceLines($invoiceId, $ads, $pricingRule, $periodStart, $periodEnd);
             $this->recalculateInvoiceTotals($invoiceId);
 
             $this->pdo->commit();
@@ -808,48 +868,56 @@ final class InvoiceService
         }
     }
 
-    private function syncInvoiceLines(int $invoiceId, array $ads, array $pricingRule): void
+    private function syncInvoiceLines(
+        int $invoiceId,
+        array $ads,
+        array $pricingRule,
+        DateTimeImmutable $periodStart,
+        DateTimeImmutable $periodEnd
+    ): void
     {
         $existingStmt = $this->pdo->prepare("
-            SELECT id, ad_id
+            SELECT id, line_code
             FROM invoice_lines
             WHERE invoice_id = :invoice_id
         ");
         $existingStmt->execute([':invoice_id' => $invoiceId]);
-        $existingByAdId = [];
+        $existingByLineCode = [];
 
         foreach ($existingStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
-            $existingByAdId[(int)$row['ad_id']] = (int)$row['id'];
+            $existingByLineCode[(string)$row['line_code']] = (int)$row['id'];
         }
 
-        $keptAdIds = [];
-        $unitPrice = number_format((float)$pricingRule['price_per_ad'], 2, '.', '');
-        $vatRate = number_format((float)$pricingRule['vat_rate'], 2, '.', '');
-        $vatAmount = number_format(round(((float)$pricingRule['price_per_ad']) * ((float)$pricingRule['vat_rate']) / 100, 2), 2, '.', '');
-        $grossAmount = number_format(round(((float)$pricingRule['price_per_ad']) + (float)$vatAmount, 2), 2, '.', '');
+        $desiredLines = $this->buildDesiredInvoiceLines($ads, $pricingRule, $periodStart, $periodEnd);
+        $keptLineCodes = [];
 
-        foreach ($ads as $ad) {
-            $adId = (int)$ad['ad_id'];
-            $keptAdIds[] = $adId;
-            $description = sprintf('Monthly advertising fee for ad "%s"', (string)$ad['title']);
+        foreach ($desiredLines as $line) {
+            $lineCode = (string)$line['line_code'];
+            $keptLineCodes[] = $lineCode;
 
             $params = [
+                ':ad_id' => $line['ad_id'],
                 ':pricing_rule_id' => (int)$pricingRule['id'],
-                ':ad_title' => (string)$ad['title'],
-                ':description' => $description,
-                ':line_period_start' => (string)$ad['line_period_start'],
-                ':line_period_end' => (string)$ad['line_period_end'],
-                ':unit_price' => $unitPrice,
-                ':net_amount' => $unitPrice,
-                ':vat_rate' => $vatRate,
-                ':vat_amount' => $vatAmount,
-                ':gross_amount' => $grossAmount,
+                ':line_type' => (string)$line['line_type'],
+                ':line_code' => $lineCode,
+                ':ad_title' => (string)$line['ad_title'],
+                ':description' => (string)$line['description'],
+                ':line_period_start' => (string)$line['line_period_start'],
+                ':line_period_end' => (string)$line['line_period_end'],
+                ':unit_price' => number_format((float)$line['unit_price'], 2, '.', ''),
+                ':net_amount' => number_format((float)$line['net_amount'], 2, '.', ''),
+                ':vat_rate' => number_format((float)$line['vat_rate'], 2, '.', ''),
+                ':vat_amount' => number_format((float)$line['vat_amount'], 2, '.', ''),
+                ':gross_amount' => number_format((float)$line['gross_amount'], 2, '.', ''),
             ];
 
-            if (isset($existingByAdId[$adId])) {
+            if (isset($existingByLineCode[$lineCode])) {
                 $stmt = $this->pdo->prepare("
                     UPDATE invoice_lines
-                    SET pricing_rule_id = :pricing_rule_id,
+                    SET ad_id = :ad_id,
+                        pricing_rule_id = :pricing_rule_id,
+                        line_type = :line_type,
+                        line_code = :line_code,
                         ad_title = :ad_title,
                         description = :description,
                         line_period_start = :line_period_start,
@@ -863,39 +931,137 @@ final class InvoiceService
                         updated_at = NOW()
                     WHERE id = :id
                 ");
-                $params[':id'] = $existingByAdId[$adId];
+                $params[':id'] = $existingByLineCode[$lineCode];
                 $stmt->execute($params);
             } else {
                 $stmt = $this->pdo->prepare("
                     INSERT INTO invoice_lines (
-                        invoice_id, ad_id, pricing_rule_id, ad_title, description,
+                        invoice_id, ad_id, pricing_rule_id, line_type, line_code, ad_title, description,
                         line_period_start, line_period_end, quantity, unit_price,
                         net_amount, vat_rate, vat_amount, gross_amount
                     ) VALUES (
-                        :invoice_id, :ad_id, :pricing_rule_id, :ad_title, :description,
+                        :invoice_id, :ad_id, :pricing_rule_id, :line_type, :line_code, :ad_title, :description,
                         :line_period_start, :line_period_end, 1.00, :unit_price,
                         :net_amount, :vat_rate, :vat_amount, :gross_amount
                     )
                 ");
                 $params[':invoice_id'] = $invoiceId;
-                $params[':ad_id'] = $adId;
                 $stmt->execute($params);
             }
         }
 
-        if ($existingByAdId !== []) {
-            $staleAdIds = array_diff(array_keys($existingByAdId), $keptAdIds);
-            if ($staleAdIds !== []) {
-                $placeholders = implode(',', array_fill(0, count($staleAdIds), '?'));
-                $params = array_merge([$invoiceId], array_map('intval', $staleAdIds));
+        if ($existingByLineCode !== []) {
+            $staleLineCodes = array_diff(array_keys($existingByLineCode), $keptLineCodes);
+            if ($staleLineCodes !== []) {
+                $placeholders = implode(',', array_fill(0, count($staleLineCodes), '?'));
+                $params = array_merge([$invoiceId], array_values($staleLineCodes));
                 $delete = $this->pdo->prepare("
                     DELETE FROM invoice_lines
                     WHERE invoice_id = ?
-                      AND ad_id IN ($placeholders)
+                      AND line_code IN ($placeholders)
                 ");
                 $delete->execute($params);
             }
         }
+    }
+
+    private function buildDesiredInvoiceLines(
+        array $ads,
+        array $pricingRule,
+        DateTimeImmutable $periodStart,
+        DateTimeImmutable $periodEnd
+    ): array
+    {
+        $lines = [];
+        $vatRate = (float)$pricingRule['vat_rate'];
+        $periodStartString = $periodStart->format('Y-m-d');
+        $periodEndString = $periodEnd->format('Y-m-d');
+
+        $subscriptionFee = (float)($pricingRule['subscription_fee'] ?? 0);
+        if ($subscriptionFee > 0) {
+            $lines[] = $this->buildInvoiceLineSpec(
+                'SUBSCRIPTION',
+                'SUBSCRIPTION',
+                null,
+                'Monthly subscription',
+                'Monthly supplier portal subscription fee.',
+                $periodStartString,
+                $periodEndString,
+                $subscriptionFee,
+                $vatRate
+            );
+        }
+
+        $serviceFee = (float)($pricingRule['optional_service_fee'] ?? 0);
+        if ($serviceFee > 0) {
+            $serviceLabel = trim((string)($pricingRule['service_fee_label'] ?? ''));
+            if ($serviceLabel === '') {
+                $serviceLabel = 'Optional service fee';
+            }
+
+            $lines[] = $this->buildInvoiceLineSpec(
+                'SERVICE',
+                'SERVICE',
+                null,
+                $serviceLabel,
+                $serviceLabel . ' for the monthly billing period.',
+                $periodStartString,
+                $periodEndString,
+                $serviceFee,
+                $vatRate
+            );
+        }
+
+        $pricePerAd = (float)$pricingRule['price_per_ad'];
+        if ($pricePerAd > 0) {
+            foreach ($ads as $ad) {
+                $adId = (int)$ad['ad_id'];
+                $lines[] = $this->buildInvoiceLineSpec(
+                    'ADVERTISEMENT',
+                    'AD:' . $adId,
+                    $adId,
+                    (string)$ad['title'],
+                    sprintf('Monthly advertising fee for ad "%s"', (string)$ad['title']),
+                    (string)$ad['line_period_start'],
+                    (string)$ad['line_period_end'],
+                    $pricePerAd,
+                    $vatRate
+                );
+            }
+        }
+
+        return $lines;
+    }
+
+    private function buildInvoiceLineSpec(
+        string $lineType,
+        string $lineCode,
+        ?int $adId,
+        string $adTitle,
+        string $description,
+        string $periodStart,
+        string $periodEnd,
+        float $netAmount,
+        float $vatRate
+    ): array
+    {
+        $vatAmount = round($netAmount * $vatRate / 100, 2);
+        $grossAmount = round($netAmount + $vatAmount, 2);
+
+        return [
+            'line_type' => $lineType,
+            'line_code' => $lineCode,
+            'ad_id' => $adId,
+            'ad_title' => $adTitle,
+            'description' => $description,
+            'line_period_start' => $periodStart,
+            'line_period_end' => $periodEnd,
+            'unit_price' => $netAmount,
+            'net_amount' => $netAmount,
+            'vat_rate' => $vatRate,
+            'vat_amount' => $vatAmount,
+            'gross_amount' => $grossAmount,
+        ];
     }
 
     private function recalculateInvoiceTotals(int $invoiceId): void
@@ -1074,6 +1240,34 @@ final class InvoiceService
         }
 
         return $result;
+    }
+
+    private function hasRecurringFixedFees(array $pricingRule): bool
+    {
+        return (float)($pricingRule['subscription_fee'] ?? 0) > 0
+            || (float)($pricingRule['optional_service_fee'] ?? 0) > 0;
+    }
+
+    private function mergeActiveSuppliersIntoBillingSet(array $eligibleBySupplier): array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT id_supplier
+            FROM suppliers
+            WHERE is_inactive = 0
+            ORDER BY id_supplier ASC
+        ");
+        $stmt->execute();
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+            $supplierId = (int)$row['id_supplier'];
+            if (!isset($eligibleBySupplier[$supplierId])) {
+                $eligibleBySupplier[$supplierId] = [];
+            }
+        }
+
+        ksort($eligibleBySupplier);
+
+        return $eligibleBySupplier;
     }
 
     private function loadStatusHistoryByAdIds(array $adIds): array
@@ -1288,6 +1482,7 @@ final class InvoiceService
     {
         $name = trim((string)($input['name'] ?? ''));
         $description = trim((string)($input['description'] ?? ''));
+        $serviceFeeLabel = trim((string)($input['service_fee_label'] ?? ''));
         $currencyCode = strtoupper(trim((string)($input['currency_code'] ?? self::DEFAULT_CURRENCY)));
         $effectiveFrom = $this->normalizeOptionalDate($input['effective_from'] ?? null);
         $effectiveTo = $this->normalizeOptionalDate($input['effective_to'] ?? null);
@@ -1301,15 +1496,25 @@ final class InvoiceService
             throw new UserFacingException('Pricing rule description must be 255 characters or fewer.');
         }
 
+        if ($serviceFeeLabel !== '' && mb_strlen($serviceFeeLabel) > 120) {
+            throw new UserFacingException('Service fee label must be 120 characters or fewer.');
+        }
+
         if (!preg_match('/^[A-Z]{3}$/', $currencyCode)) {
             throw new UserFacingException('Currency code must be a 3-letter ISO code such as SEK.');
         }
 
-        $pricePerAd = $this->normalizeMoney($input['price_per_ad'] ?? null, 'Price per ad is required.');
+        $pricePerAd = $this->normalizeOptionalMoney($input['price_per_ad'] ?? null);
+        $subscriptionFee = $this->normalizeOptionalMoney($input['subscription_fee'] ?? null);
+        $optionalServiceFee = $this->normalizeOptionalMoney($input['optional_service_fee'] ?? null);
         $vatRate = $this->normalizeMoney($input['vat_rate'] ?? null, 'VAT rate is required.');
 
-        if ($pricePerAd <= 0) {
-            throw new UserFacingException('Price per ad must be greater than zero.');
+        if ($pricePerAd < 0 || $subscriptionFee < 0 || $optionalServiceFee < 0) {
+            throw new UserFacingException('Pricing amounts cannot be negative.');
+        }
+
+        if ($pricePerAd <= 0 && $subscriptionFee <= 0 && $optionalServiceFee <= 0) {
+            throw new UserFacingException('At least one billing component must be greater than zero.');
         }
 
         if ($vatRate < 0 || $vatRate > 100) {
@@ -1324,6 +1529,9 @@ final class InvoiceService
             'name' => $name,
             'description' => $description === '' ? null : $description,
             'price_per_ad' => number_format($pricePerAd, 2, '.', ''),
+            'subscription_fee' => number_format($subscriptionFee, 2, '.', ''),
+            'optional_service_fee' => number_format($optionalServiceFee, 2, '.', ''),
+            'service_fee_label' => $serviceFeeLabel === '' ? null : $serviceFeeLabel,
             'currency_code' => $currencyCode,
             'vat_rate' => number_format($vatRate, 2, '.', ''),
             'effective_from' => $effectiveFrom,
@@ -1473,6 +1681,21 @@ final class InvoiceService
         return round((float)$normalized, 2);
     }
 
+    private function normalizeOptionalMoney(mixed $value): float
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return 0.0;
+        }
+
+        $normalized = str_replace([' ', ','], ['', '.'], $value);
+        if (!is_numeric($normalized)) {
+            throw new UserFacingException('Please enter a valid numeric amount.');
+        }
+
+        return round((float)$normalized, 2);
+    }
+
     private function normalizeDateInput(mixed $value, string $requiredMessage): string
     {
         $value = trim((string)$value);
@@ -1587,7 +1810,7 @@ final class InvoiceService
         }
 
         return sprintf(
-            '<h1 style="font-size:22px;">Invoice %s</h1><table cellpadding="0" cellspacing="0" style="width:100%%;margin-bottom:16px;"><tr><td style="width:50%%;vertical-align:top;"><h3>Issuer</h3><div>%s</div></td><td style="width:50%%;vertical-align:top;"><h3>Supplier</h3><div>%s</div></td></tr></table><table cellpadding="0" cellspacing="0" style="width:100%%;margin-bottom:16px;"><tr><td style="width:25%%;font-weight:bold;">Status</td><td style="width:25%%;">%s</td><td style="width:25%%;font-weight:bold;">Billing month</td><td style="width:25%%;">%s-%02d</td></tr><tr><td style="font-weight:bold;">Issue date</td><td>%s</td><td style="font-weight:bold;">Due date</td><td>%s</td></tr></table><h3>Line items</h3><table cellpadding="0" cellspacing="0" style="width:100%%;border-collapse:collapse;"><thead><tr><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">Ad</th><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">Description</th><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">Coverage</th><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">Net</th><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">VAT</th><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">Gross</th></tr></thead><tbody>%s</tbody></table><h3 style="margin-top:18px;">Totals</h3><table cellpadding="0" cellspacing="0" style="width:45%%;margin-left:auto;"><tr><td style="font-weight:bold;">Subtotal</td><td style="text-align:right;">%s %s</td></tr><tr><td style="font-weight:bold;">VAT (%s%%)</td><td style="text-align:right;">%s %s</td></tr><tr><td style="font-weight:bold;">Total</td><td style="text-align:right;">%s %s</td></tr></table>%s',
+            '<h1 style="font-size:22px;">Invoice %s</h1><table cellpadding="0" cellspacing="0" style="width:100%%;margin-bottom:16px;"><tr><td style="width:50%%;vertical-align:top;"><h3>Issuer</h3><div>%s</div></td><td style="width:50%%;vertical-align:top;"><h3>Supplier</h3><div>%s</div></td></tr></table><table cellpadding="0" cellspacing="0" style="width:100%%;margin-bottom:16px;"><tr><td style="width:25%%;font-weight:bold;">Status</td><td style="width:25%%;">%s</td><td style="width:25%%;font-weight:bold;">Billing month</td><td style="width:25%%;">%s-%02d</td></tr><tr><td style="font-weight:bold;">Issue date</td><td>%s</td><td style="font-weight:bold;">Due date</td><td>%s</td></tr></table><h3>Line items</h3><table cellpadding="0" cellspacing="0" style="width:100%%;border-collapse:collapse;"><thead><tr><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">Item</th><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">Description</th><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">Coverage</th><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">Net</th><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">VAT</th><th style="border:1px solid #ccc;padding:6px;background-color:#f5f5f5;">Gross</th></tr></thead><tbody>%s</tbody></table><h3 style="margin-top:18px;">Totals</h3><table cellpadding="0" cellspacing="0" style="width:45%%;margin-left:auto;"><tr><td style="font-weight:bold;">Subtotal</td><td style="text-align:right;">%s %s</td></tr><tr><td style="font-weight:bold;">VAT (%s%%)</td><td style="text-align:right;">%s %s</td></tr><tr><td style="font-weight:bold;">Total</td><td style="text-align:right;">%s %s</td></tr></table>%s',
             $this->escapeHtml((string)$invoice['invoice_number']),
             nl2br($this->escapeHtml($issuerBlock)),
             nl2br($this->escapeHtml($supplierBlock)),

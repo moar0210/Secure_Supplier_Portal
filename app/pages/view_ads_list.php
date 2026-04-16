@@ -37,6 +37,7 @@ $badge = static function (string $status): string {
                 <th>ID</th>
                 <th>Category</th>
                 <th>Title</th>
+                <th>Price Model</th>
                 <th>Status</th>
                 <th>Active</th>
                 <th>Updated</th>
@@ -54,6 +55,7 @@ $badge = static function (string $status): string {
                     <td><?= $id ?></td>
                     <td><?= h((string)($row['category_name'] ?? '-')) ?></td>
                     <td><?= h((string)$row['title']) ?></td>
+                    <td><?= h(AdsService::priceModelLabel((string)($row['price_model_type'] ?? '')) ?: '-') ?></td>
                     <td><?= $badge($status) ?></td>
                     <td><?= $isActive ? 'yes' : 'no' ?></td>
                     <td><?= h((string)$row['updated_at']) ?></td>

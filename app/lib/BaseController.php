@@ -66,6 +66,7 @@ abstract class BaseController
         $this->writeLog('error', $event, [
             'page' => (string)($_GET['page'] ?? 'home'),
             'user_id' => $this->auth->userId(),
+            'supplier_id' => $this->auth->supplierId(),
             'exception' => get_class($e),
             'message' => $e->getMessage(),
             'file' => $e->getFile(),
@@ -75,14 +76,6 @@ abstract class BaseController
 
     private function writeLog(string $level, string $message, array $context = []): void
     {
-        $payload = '';
-        if ($context !== []) {
-            $encoded = json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            if ($encoded !== false) {
-                $payload = ' ' . $encoded;
-            }
-        }
-
-        error_log('[Supplier Portal][' . strtoupper($level) . '] ' . $message . $payload);
+        PortalLogger::write($this->pdo(), $level, $message, $context);
     }
 }

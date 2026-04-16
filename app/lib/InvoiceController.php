@@ -137,6 +137,15 @@ final class InvoiceController extends BaseController
                     $this->redirect('?page=admin_invoice_view&id=' . $invoiceId . '&notice=' . rawurlencode('Payment recorded and invoice marked as paid.'));
                 }
 
+                if ($action === 'delete_draft') {
+                    $this->invoiceService->deleteDraftInvoice($invoiceId);
+                    $this->logActivity('Draft invoice deleted', [
+                        'invoice_id' => $invoiceId,
+                        'actor_user_id' => $this->auth->userId(),
+                    ]);
+                    $this->redirect('?page=admin_invoices&notice=' . rawurlencode('Draft invoice deleted.'));
+                }
+
                 throw new RuntimeException('Unknown action.');
             } catch (Throwable $e) {
                 $error = $this->presentError($e, 'Unable to update this invoice right now.');

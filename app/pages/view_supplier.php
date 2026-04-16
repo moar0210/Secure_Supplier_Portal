@@ -1,8 +1,20 @@
 <h1>Supplier Profile</h1>
 
+<?php if ($created): ?>
+    <div style="padding:8px;border:1px solid #080;background:#efe;margin-bottom:12px;">
+        Supplier created successfully.
+    </div>
+<?php endif; ?>
+
 <?php if ($updated): ?>
     <div style="padding:8px;border:1px solid #080;background:#efe;margin-bottom:12px;">
         Supplier profile updated successfully.
+    </div>
+<?php endif; ?>
+
+<?php if (!empty($notice)): ?>
+    <div style="padding:8px;border:1px solid #080;background:#efe;margin-bottom:12px;">
+        <?= h((string)$notice) ?>
     </div>
 <?php endif; ?>
 
@@ -10,6 +22,30 @@
     <div style="padding:8px;border:1px solid #a00;background:#fee;margin-bottom:12px;">
         <?= h($error) ?>
     </div>
+<?php endif; ?>
+
+<div style="padding:12px;border:1px solid #ccc;background:#fafafa;margin-bottom:16px;">
+    <strong>Supplier status:</strong>
+    <?= !empty($supplier['is_inactive']) ? 'Inactive / pending approval' : 'Active / approved' ?>
+
+    <?php if (!empty($isAdmin)): ?>
+        <form method="post" action="?page=supplier_status" style="display:inline;margin-left:12px;">
+            <?= Csrf::input(); ?>
+            <input type="hidden" name="id" value="<?= (int)$supplier['id_supplier'] ?>">
+            <input type="hidden" name="active" value="<?= !empty($supplier['is_inactive']) ? '1' : '0' ?>">
+            <button type="submit">
+                <?= !empty($supplier['is_inactive']) ? 'Approve / Activate Supplier' : 'Deactivate Supplier' ?>
+            </button>
+        </form>
+    <?php endif; ?>
+</div>
+
+<?php if (empty($isAdmin)): ?>
+    <p style="margin-top:0;">
+        <a href="?page=supplier_users">Company users</a>
+        |
+        <a href="?page=supplier_stats">Statistics</a>
+    </p>
 <?php endif; ?>
 
 <form method="post" enctype="multipart/form-data" autocomplete="off">

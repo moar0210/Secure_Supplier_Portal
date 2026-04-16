@@ -85,7 +85,7 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
     <table>
         <thead>
             <tr>
-                <th>Ad</th>
+                <th>Item</th>
                 <th>Description</th>
                 <th>Coverage</th>
                 <th>Net</th>
@@ -96,7 +96,12 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
         <tbody>
             <?php foreach ($invoice['lines'] as $line): ?>
                 <tr>
-                    <td><?= h((string)$line['ad_title']) ?></td>
+                    <td>
+                        <?= h((string)$line['ad_title']) ?>
+                        <?php if (!empty($line['line_type']) && (string)$line['line_type'] !== 'ADVERTISEMENT'): ?>
+                            <br><span style="opacity:.75;"><?= h((string)$line['line_type']) ?></span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= h((string)$line['description']) ?></td>
                     <td><?= h((string)$line['line_period_start']) ?> to <?= h((string)$line['line_period_end']) ?></td>
                     <td><?= $money($line['net_amount']) ?> <?= h((string)$invoice['currency_code']) ?></td>
@@ -114,6 +119,12 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
         <?= Csrf::input(); ?>
         <input type="hidden" name="action" value="mark_sent">
         <button type="submit">Mark as sent</button>
+    </form>
+
+    <form method="post" style="margin-top:10px;" data-confirm="Delete this draft invoice?">
+        <?= Csrf::input(); ?>
+        <input type="hidden" name="action" value="delete_draft">
+        <button type="submit">Delete draft invoice</button>
     </form>
 <?php endif; ?>
 

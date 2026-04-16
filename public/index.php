@@ -17,6 +17,7 @@ $config = require $configPath;
 require $root . '/app/lib/SecurityBootstrap.php';
 require $root . '/app/lib/Database.php';
 require $root . '/app/lib/UserFacingException.php';
+require $root . '/app/lib/PortalLogger.php';
 require $root . '/app/lib/Crypto.php';
 require $root . '/app/lib/SupplierProfileEncryptionMap.php';
 
@@ -43,6 +44,8 @@ require $root . '/app/lib/Csrf.php';
 require $root . '/app/lib/AdsService.php';
 require $root . '/app/lib/SupplierService.php';
 require $root . '/app/lib/InvoiceService.php';
+require $root . '/app/lib/PortalUserService.php';
+require $root . '/app/lib/StatsService.php';
 require $root . '/app/lib/View.php';
 require $root . '/app/lib/BaseController.php';
 require $root . '/app/lib/StaticController.php';
@@ -51,10 +54,14 @@ require $root . '/app/lib/SupplierController.php';
 require $root . '/app/lib/AdsController.php';
 require $root . '/app/lib/AdminController.php';
 require $root . '/app/lib/InvoiceController.php';
+require $root . '/app/lib/UserController.php';
+require $root . '/app/lib/StatsController.php';
 
 $auth = new Auth($pdo);
 $adsService = new AdsService($pdo);
 $supplierService = new SupplierService($pdo, $crypto);
+$portalUserService = new PortalUserService($pdo);
+$statsService = new StatsService($pdo);
 $view = new View($root . '/app/pages');
 
 $staticController = new StaticController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
@@ -63,14 +70,20 @@ $supplierController = new SupplierController($view, $auth, $db, $crypto, $adsSer
 $adsController = new AdsController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
 $adminController = new AdminController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
 $invoiceController = new InvoiceController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
+$userController = new UserController($view, $auth, $db, $crypto, $adsService, $supplierService, $portalUserService, $config);
+$statsController = new StatsController($view, $auth, $db, $crypto, $adsService, $supplierService, $statsService, $config);
 
 $page = (string)($_GET['page'] ?? 'home');
 
 $routes = [
     'home' => [$staticController, 'home'],
+    'marketplace' => [$statsController, 'marketplace'],
+    'marketplace_ad' => [$statsController, 'marketplaceAd'],
     'dbtest' => [$staticController, 'dbtest'],
     'suppliers' => [$supplierController, 'index'],
+    'supplier_create' => [$supplierController, 'create'],
     'supplier' => [$supplierController, 'show'],
+    'supplier_status' => [$supplierController, 'status'],
     'supplier_logo' => [$supplierController, 'logo'],
     'login' => [$authController, 'login'],
     'logout' => [$authController, 'logout'],
@@ -89,10 +102,14 @@ $routes = [
     'admin_ad_review' => [$adminController, 'adReview'],
     'admin_categories' => [$adminController, 'categories'],
     'admin_category_edit' => [$adminController, 'categoryEdit'],
+    'admin_users' => [$userController, 'adminUsers'],
+    'supplier_users' => [$userController, 'supplierUsers'],
+    'admin_reports' => [$statsController, 'adminReports'],
     'admin_invoices' => [$invoiceController, 'adminInvoices'],
     'admin_invoice_view' => [$invoiceController, 'adminInvoiceView'],
     'admin_pricing_rules' => [$invoiceController, 'adminPricingRules'],
     'supplier_invoices' => [$invoiceController, 'supplierInvoices'],
+    'supplier_stats' => [$statsController, 'supplierStats'],
     'invoice_pdf' => [$invoiceController, 'pdf'],
 ];
 
@@ -100,13 +117,13 @@ $handler = $routes[$page] ?? [$staticController, 'notFound'];
 try {
     $handler();
 } catch (Throwable $e) {
-    error_log('[Supplier Portal][ERROR] Route dispatch failed ' . json_encode([
+    PortalLogger::write($pdo ?? null, 'ERROR', 'Route dispatch failed', [
         'page' => $page,
         'exception' => get_class($e),
         'message' => $e->getMessage(),
         'file' => $e->getFile(),
         'line' => $e->getLine(),
-    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    ]);
 
     if (!headers_sent()) {
         http_response_code(500);

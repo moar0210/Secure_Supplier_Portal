@@ -17,6 +17,7 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
 
 <p style="opacity:.85;">
     Rule selection assumption: if multiple active rules overlap a billing month, the most recent `effective_from` wins.
+    Monthly invoices can combine subscription, advertisement usage, and optional service-fee lines from the selected rule.
 </p>
 
 <h2>Create Rule</h2>
@@ -30,7 +31,15 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
         </div>
         <div>
             <label>Price per ad</label><br>
-            <input type="number" name="price_per_ad" min="0.01" step="0.01" value="500.00" required>
+            <input type="number" name="price_per_ad" min="0" step="0.01" value="500.00" required>
+        </div>
+        <div>
+            <label>Subscription fee</label><br>
+            <input type="number" name="subscription_fee" min="0" step="0.01" value="0.00">
+        </div>
+        <div>
+            <label>Optional service fee</label><br>
+            <input type="number" name="optional_service_fee" min="0" step="0.01" value="0.00">
         </div>
         <div>
             <label>VAT rate</label><br>
@@ -54,6 +63,10 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
         <input name="description" maxlength="255" style="width:520px;">
     </div>
     <div style="margin-top:10px;">
+        <label>Service fee label</label><br>
+        <input name="service_fee_label" maxlength="120" style="width:520px;" placeholder="Optional onboarding support">
+    </div>
+    <div style="margin-top:10px;">
         <label><input type="checkbox" name="is_active" value="1" checked> Active</label>
     </div>
     <button type="submit" style="margin-top:10px;">Create rule</button>
@@ -74,7 +87,15 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
                 </div>
                 <div>
                     <label>Price per ad</label><br>
-                    <input type="number" name="price_per_ad" min="0.01" step="0.01" value="<?= h($money($row['price_per_ad'])) ?>">
+                    <input type="number" name="price_per_ad" min="0" step="0.01" value="<?= h($money($row['price_per_ad'])) ?>">
+                </div>
+                <div>
+                    <label>Subscription fee</label><br>
+                    <input type="number" name="subscription_fee" min="0" step="0.01" value="<?= h($money($row['subscription_fee'] ?? 0)) ?>">
+                </div>
+                <div>
+                    <label>Optional service fee</label><br>
+                    <input type="number" name="optional_service_fee" min="0" step="0.01" value="<?= h($money($row['optional_service_fee'] ?? 0)) ?>">
                 </div>
                 <div>
                     <label>VAT rate</label><br>
@@ -96,6 +117,10 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
             <div style="margin-top:10px;">
                 <label>Description</label><br>
                 <input name="description" maxlength="255" value="<?= h((string)($row['description'] ?? '')) ?>" style="width:520px;">
+            </div>
+            <div style="margin-top:10px;">
+                <label>Service fee label</label><br>
+                <input name="service_fee_label" maxlength="120" value="<?= h((string)($row['service_fee_label'] ?? '')) ?>" style="width:520px;">
             </div>
             <div style="margin-top:10px;">
                 <label><input type="checkbox" name="is_active" value="1" <?= !empty($row['is_active']) ? 'checked' : '' ?>> Active</label>

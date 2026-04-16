@@ -38,6 +38,7 @@ final class AdsController extends BaseController
         $form = [
             'title' => '',
             'description' => '',
+            'price_model_type' => '',
             'price_text' => '',
             'category_id' => '',
             'valid_from' => '',
@@ -59,6 +60,7 @@ final class AdsController extends BaseController
             $form = [
                 'title' => (string)($_POST['title'] ?? ''),
                 'description' => (string)($_POST['description'] ?? ''),
+                'price_model_type' => (string)($_POST['price_model_type'] ?? ''),
                 'price_text' => (string)($_POST['price_text'] ?? ''),
                 'category_id' => (string)($_POST['category_id'] ?? ''),
                 'valid_from' => (string)($_POST['valid_from'] ?? ''),
@@ -114,6 +116,7 @@ final class AdsController extends BaseController
                 $submittedValues = [
                     'title' => (string)($_POST['title'] ?? ''),
                     'description' => (string)($_POST['description'] ?? ''),
+                    'price_model_type' => (string)($_POST['price_model_type'] ?? ''),
                     'price_text' => (string)($_POST['price_text'] ?? ''),
                     'category_id' => (string)($_POST['category_id'] ?? ''),
                     'valid_from' => (string)($_POST['valid_from'] ?? ''),

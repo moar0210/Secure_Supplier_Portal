@@ -9,6 +9,14 @@ final class AdsService
     public const STATUS_APPROVED = 'APPROVED';
     public const STATUS_REJECTED = 'REJECTED';
 
+    private const PRICE_MODELS = [
+        'FIXED_DISCOUNT' => 'Fixed discount',
+        'LAYER_DISCOUNT' => 'Layer discount',
+        'FREE_GIFT' => 'Free gift',
+        'PRICE_LIST' => 'Price list',
+        'CUSTOM' => 'Custom offer',
+    ];
+
     private \PDO $pdo;
 
     public function __construct(\PDO $pdo)
@@ -30,6 +38,7 @@ final class AdsService
                 c.name AS category_name,
                 a.title,
                 a.description,
+                a.price_model_type,
                 a.price_text,
                 a.valid_from,
                 a.valid_to,
@@ -57,6 +66,7 @@ final class AdsService
                 c.name AS category_name,
                 a.title,
                 a.description,
+                a.price_model_type,
                 a.price_text,
                 a.valid_from,
                 a.valid_to,
@@ -102,15 +112,16 @@ final class AdsService
         try {
             $stmt = $this->pdo->prepare("
                 INSERT INTO ads
-                    (supplier_id, category_id, title, description, price_text, valid_from, valid_to, is_active, status, rejection_reason, created_at, updated_at)
+                    (supplier_id, category_id, title, description, price_model_type, price_text, valid_from, valid_to, is_active, status, rejection_reason, created_at, updated_at)
                 VALUES
-                    (:sid, :cid, :t, :d, :p, :vf, :vt, :ia, :st, NULL, NOW(), NOW())
+                    (:sid, :cid, :t, :d, :pm, :p, :vf, :vt, :ia, :st, NULL, NOW(), NOW())
             ");
             $stmt->execute([
                 ':sid' => $supplierId,
                 ':cid' => $clean['category_id'],
                 ':t'   => $clean['title'],
                 ':d'   => $clean['description'],
+                ':pm'  => $clean['price_model_type'],
                 ':p'   => $clean['price_text'],
                 ':vf'  => $clean['valid_from'],
                 ':vt'  => $clean['valid_to'],
@@ -223,6 +234,7 @@ final class AdsService
                         category_id = :cid,
                         title = :t,
                         description = :d,
+                        price_model_type = :pm,
                         price_text = :p,
                         valid_from = :vf,
                         valid_to = :vt,
@@ -239,6 +251,7 @@ final class AdsService
                         category_id = :cid,
                         title = :t,
                         description = :d,
+                        price_model_type = :pm,
                         price_text = :p,
                         valid_from = :vf,
                         valid_to = :vt,
@@ -253,6 +266,7 @@ final class AdsService
                 ':cid' => $clean['category_id'],
                 ':t'   => $clean['title'],
                 ':d'   => $clean['description'],
+                ':pm'  => $clean['price_model_type'],
                 ':p'   => $clean['price_text'],
                 ':vf'  => $clean['valid_from'],
                 ':vt'  => $clean['valid_to'],
@@ -371,6 +385,7 @@ final class AdsService
                     a.category_id,
                     c.name AS category_name,
                     a.title,
+                    a.price_model_type,
                     a.is_active,
                     a.status,
                     a.created_at,
@@ -392,6 +407,7 @@ final class AdsService
                 a.category_id,
                 c.name AS category_name,
                 a.title,
+                a.price_model_type,
                 a.is_active,
                 a.status,
                 a.created_at,
@@ -510,6 +526,18 @@ final class AdsService
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
+    public static function priceModelOptions(): array
+    {
+        return self::PRICE_MODELS;
+    }
+
+    public static function priceModelLabel(?string $value): string
+    {
+        $normalized = strtoupper(trim((string)$value));
+
+        return self::PRICE_MODELS[$normalized] ?? '';
+    }
+
     public function createCategory(string $name): int
     {
         $name = trim($name);
@@ -576,7 +604,14 @@ final class AdsService
     {
         $title = trim((string)($data['title'] ?? ''));
         $desc  = trim((string)($data['description'] ?? ''));
+        $priceModelType = strtoupper(trim((string)($data['price_model_type'] ?? '')));
         $price = isset($data['price_text']) ? trim((string)$data['price_text']) : null;
+
+        if ($priceModelType === '') {
+            $priceModelType = null;
+        } elseif (!isset(self::PRICE_MODELS[$priceModelType])) {
+            throw new UserFacingException('Price model is invalid.');
+        }
 
         $categoryId = $data['category_id'] ?? null;
         if ($categoryId === '' || $categoryId === 0 || $categoryId === '0') {
@@ -621,6 +656,7 @@ final class AdsService
         return [
             'title' => $title,
             'description' => $desc,
+            'price_model_type' => $priceModelType,
             'price_text' => $price,
             'category_id' => $categoryId,
             'valid_from' => $validFrom,
