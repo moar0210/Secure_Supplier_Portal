@@ -1,30 +1,36 @@
-<h1>Admin - Categories</h1>
+<div class="page-header">
+    <h1>Categories</h1>
+</div>
 
 <?php if ($error): ?>
-    <div style="padding:8px;border:1px solid #a00;background:#fee;margin-bottom:12px;">
-        <?= h($error) ?>
-    </div>
+    <div class="alert alert--error"><?= h($error) ?></div>
 <?php endif; ?>
 
 <h2>Create category</h2>
-<form method="post" style="margin-bottom:16px;">
+<form method="post" class="card mb-5">
     <?= Csrf::input(); ?>
     <input type="hidden" name="action" value="create">
-    <input name="name" required maxlength="100" placeholder="Category name" style="width:320px;">
-    <button type="submit">Create</button>
+    <div class="field-row">
+        <div class="field">
+            <label>Name</label>
+            <input name="name" required maxlength="100" placeholder="Category name">
+        </div>
+    </div>
+    <div class="form-actions">
+        <button type="submit">Create category</button>
+    </div>
 </form>
 
 <h2>Existing categories</h2>
-
 <?php if (!$categories): ?>
-    <p>No categories yet.</p>
+    <div class="card card--muted"><p class="mb-0 muted">No categories yet.</p></div>
 <?php else: ?>
     <table>
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Name</th>
-                <th style="width:220px;"></th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -32,14 +38,13 @@
                 <tr>
                     <td><?= (int)$category['id'] ?></td>
                     <td><?= h((string)$category['name']) ?></td>
-                    <td>
-                        <a href="?page=admin_category_edit&id=<?= (int)$category['id'] ?>">Rename</a>
-
-                        <form method="post" style="display:inline;" data-confirm="Delete this category?">
+                    <td class="actions-inline">
+                        <a href="?page=admin_category_edit&amp;id=<?= (int)$category['id'] ?>">Rename</a>
+                        <form method="post" class="inline-form" data-confirm="Delete this category?">
                             <?= Csrf::input(); ?>
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="id" value="<?= (int)$category['id'] ?>">
-                            <button type="submit">Delete</button>
+                            <button type="submit" class="btn-danger">Delete</button>
                         </form>
                     </td>
                 </tr>

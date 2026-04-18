@@ -1,27 +1,25 @@
-<h1>Admin - Portal Users</h1>
+<div class="page-header">
+    <h1>Portal users</h1>
+</div>
 
 <?php if ($notice): ?>
-    <div style="padding:8px;border:1px solid #080;background:#efe;margin-bottom:12px;">
-        <?= h((string)$notice) ?>
-    </div>
+    <div class="alert alert--success"><?= h((string)$notice) ?></div>
 <?php endif; ?>
 
 <?php if ($error): ?>
-    <div style="padding:8px;border:1px solid #a00;background:#fee;margin-bottom:12px;">
-        <?= h((string)$error) ?>
-    </div>
+    <div class="alert alert--error"><?= h((string)$error) ?></div>
 <?php endif; ?>
 
-<form method="get" style="padding:12px;border:1px solid #ccc;margin-bottom:18px;">
+<form method="get" class="filter-bar">
     <input type="hidden" name="page" value="admin_users">
-    <strong>Filters</strong>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;">
-        <div>
-            <label>Search</label><br>
+    <div class="filter-bar__title">Filters</div>
+    <div class="field-row">
+        <div class="field">
+            <label>Search</label>
             <input name="search" value="<?= h((string)$filters['search']) ?>" placeholder="Username, email, supplier">
         </div>
-        <div>
-            <label>Role</label><br>
+        <div class="field">
+            <label>Role</label>
             <select name="role">
                 <?php foreach (['ALL', 'ADMIN', 'SUPPLIER'] as $role): ?>
                     <option value="<?= h($role) ?>" <?= strtoupper((string)$filters['role']) === $role ? 'selected' : '' ?>>
@@ -30,18 +28,18 @@
                 <?php endforeach; ?>
             </select>
         </div>
-        <div>
-            <label>Status</label><br>
+        <div class="field">
+            <label>Status</label>
             <select name="status">
-                <?php foreach (['ALL', 'ACTIVE', 'INACTIVE'] as $status): ?>
-                    <option value="<?= h($status) ?>" <?= strtoupper((string)$filters['status']) === $status ? 'selected' : '' ?>>
-                        <?= h($status) ?>
+                <?php foreach (['ALL', 'ACTIVE', 'INACTIVE'] as $statusOption): ?>
+                    <option value="<?= h($statusOption) ?>" <?= strtoupper((string)$filters['status']) === $statusOption ? 'selected' : '' ?>>
+                        <?= h($statusOption) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
         </div>
-        <div>
-            <label>Supplier</label><br>
+        <div class="field">
+            <label>Supplier</label>
             <select name="supplier_id">
                 <option value="">All suppliers</option>
                 <?php foreach ($supplierOptions as $supplier): ?>
@@ -53,32 +51,34 @@
             </select>
         </div>
     </div>
-    <button type="submit" style="margin-top:10px;">Apply filters</button>
-    <a href="?page=admin_users" style="margin-left:10px;">Reset</a>
+    <div class="filter-bar__actions">
+        <button type="submit">Apply filters</button>
+        <a href="?page=admin_users" class="muted small">Reset</a>
+    </div>
 </form>
 
-<h2>Create User</h2>
-<form method="post" style="padding:12px;border:1px solid #ccc;margin-bottom:18px;">
+<h2>Create user</h2>
+<form method="post" class="card mb-5">
     <?= Csrf::input(); ?>
     <input type="hidden" name="action" value="create">
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-        <div>
-            <label>Username</label><br>
+    <div class="field-row">
+        <div class="field">
+            <label>Username</label>
             <input name="username" required maxlength="50">
         </div>
-        <div>
-            <label>Email</label><br>
+        <div class="field">
+            <label>Email</label>
             <input name="email" type="email" required maxlength="255">
         </div>
-        <div>
-            <label>Role</label><br>
+        <div class="field">
+            <label>Role</label>
             <select name="role_name">
                 <option value="SUPPLIER">SUPPLIER</option>
                 <option value="ADMIN">ADMIN</option>
             </select>
         </div>
-        <div>
-            <label>Supplier</label><br>
+        <div class="field">
+            <label>Supplier</label>
             <select name="supplier_id">
                 <option value="">No supplier</option>
                 <?php foreach ($supplierOptions as $supplier): ?>
@@ -89,52 +89,54 @@
             </select>
         </div>
     </div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;">
-        <div>
-            <label>Password</label><br>
+    <div class="field-row mt-3">
+        <div class="field">
+            <label>Password</label>
             <input name="password" type="password" required>
         </div>
-        <div>
-            <label>Confirm password</label><br>
+        <div class="field">
+            <label>Confirm password</label>
             <input name="confirm_password" type="password" required>
         </div>
     </div>
-    <div style="margin-top:10px;">
+    <div class="mt-3">
         <input type="hidden" name="is_active" value="0">
         <label><input type="checkbox" name="is_active" value="1" checked> Active</label>
     </div>
-    <button type="submit" style="margin-top:10px;">Create user</button>
+    <div class="form-actions">
+        <button type="submit">Create user</button>
+    </div>
 </form>
 
-<h2>Existing Users</h2>
+<h2>Existing users</h2>
 <?php if (!$rows): ?>
-    <p>No portal users found.</p>
+    <div class="card card--muted"><p class="mb-0 muted">No portal users found.</p></div>
 <?php else: ?>
     <?php foreach ($rows as $row): ?>
         <?php $roles = (array)($row['roles'] ?? []); ?>
-        <form method="post" style="padding:12px;border:1px solid #ccc;margin-bottom:12px;">
+        <form method="post" class="card mb-3">
             <?= Csrf::input(); ?>
             <input type="hidden" name="action" value="update">
             <input type="hidden" name="id" value="<?= (int)$row['id'] ?>">
 
-            <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                <div>
-                    <label>Username</label><br>
+            <div class="field-row">
+                <div class="field">
+                    <label>Username</label>
                     <input name="username" required maxlength="50" value="<?= h((string)$row['username']) ?>">
                 </div>
-                <div>
-                    <label>Email</label><br>
+                <div class="field">
+                    <label>Email</label>
                     <input name="email" type="email" required maxlength="255" value="<?= h((string)$row['email']) ?>">
                 </div>
-                <div>
-                    <label>Role</label><br>
+                <div class="field">
+                    <label>Role</label>
                     <select name="role_name">
                         <option value="SUPPLIER" <?= in_array('SUPPLIER', $roles, true) ? 'selected' : '' ?>>SUPPLIER</option>
                         <option value="ADMIN" <?= in_array('ADMIN', $roles, true) ? 'selected' : '' ?>>ADMIN</option>
                     </select>
                 </div>
-                <div>
-                    <label>Supplier</label><br>
+                <div class="field">
+                    <label>Supplier</label>
                     <select name="supplier_id">
                         <option value="">No supplier</option>
                         <?php foreach ($supplierOptions as $supplier): ?>
@@ -147,32 +149,34 @@
                 </div>
             </div>
 
-            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;">
-                <div>
-                    <label>New password</label><br>
+            <div class="field-row mt-3">
+                <div class="field">
+                    <label>New password</label>
                     <input name="password" type="password" placeholder="Leave blank to keep">
                 </div>
-                <div>
-                    <label>Confirm password</label><br>
+                <div class="field">
+                    <label>Confirm password</label>
                     <input name="confirm_password" type="password" placeholder="Leave blank to keep">
                 </div>
             </div>
 
-            <div style="margin-top:10px;">
+            <div class="mt-3">
                 <input type="hidden" name="is_active" value="0">
                 <label><input type="checkbox" name="is_active" value="1" <?= !empty($row['is_active']) ? 'checked' : '' ?>> Active</label>
                 <?php if ((int)$row['id'] === (int)$currentUserId): ?>
-                    <span style="margin-left:10px;opacity:.8;">Current session</span>
+                    <span class="muted small" style="margin-left:10px;">Current session</span>
                 <?php endif; ?>
             </div>
 
-            <button type="submit" style="margin-top:10px;">Save changes</button>
-            <p style="margin:10px 0 0;opacity:.85;">
+            <div class="form-actions">
+                <button type="submit">Save changes</button>
+            </div>
+            <p class="muted small mt-3 mb-0">
                 Roles: <?= h((string)($row['role_names'] ?: 'None')) ?>
                 <?php if (!empty($row['supplier_name'])): ?>
-                    | Supplier: <?= h((string)$row['supplier_name']) ?> (#<?= (int)$row['supplier_id'] ?>)
+                    &middot; Supplier: <?= h((string)$row['supplier_name']) ?> (#<?= (int)$row['supplier_id'] ?>)
                 <?php endif; ?>
-                | Last login: <?= h((string)($row['last_login_at'] ?? 'never')) ?>
+                &middot; Last login: <?= h((string)($row['last_login_at'] ?? 'never')) ?>
             </p>
         </form>
     <?php endforeach; ?>

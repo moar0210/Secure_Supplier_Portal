@@ -1,57 +1,61 @@
 <?php
 $badge = static function (string $status): string {
     $status = strtoupper($status);
-
-    return match ($status) {
-        'PAID' => '<span style="padding:2px 6px;border:1px solid #080;background:#efe;">PAID</span>',
-        'SENT' => '<span style="padding:2px 6px;border:1px solid #0a5;background:#e7f6ff;">SENT</span>',
-        'OVERDUE' => '<span style="padding:2px 6px;border:1px solid #a00;background:#fee;">OVERDUE</span>',
-        default => '<span style="padding:2px 6px;border:1px solid #888;background:#f6f6f6;">DRAFT</span>',
+    $cls = match ($status) {
+        'PAID' => 'badge--paid',
+        'SENT' => 'badge--sent',
+        'OVERDUE' => 'badge--overdue',
+        default => 'badge--draft',
     };
+    return '<span class="badge ' . $cls . '">' . h($status ?: 'DRAFT') . '</span>';
 };
 $money = static fn(mixed $value): string => number_format((float)$value, 2);
 ?>
-<h1>Admin - Invoices</h1>
+<div class="page-header">
+    <h1>Invoices</h1>
+</div>
 
 <?php if ($notice): ?>
-    <div style="padding:8px;border:1px solid #080;background:#efe;margin-bottom:12px;">
-        <?= h($notice) ?>
-    </div>
+    <div class="alert alert--success"><?= h((string)$notice) ?></div>
 <?php endif; ?>
 
 <?php if ($error): ?>
-    <div style="padding:8px;border:1px solid #a00;background:#fee;margin-bottom:12px;">
-        <?= h($error) ?>
-    </div>
+    <div class="alert alert--error"><?= h((string)$error) ?></div>
 <?php endif; ?>
 
-<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:18px;">
-    <form method="post" style="padding:12px;border:1px solid #ccc;">
+<div class="section-grid mb-5">
+    <form method="post" class="card">
         <?= Csrf::input(); ?>
         <input type="hidden" name="action" value="generate">
-        <strong>Generate Monthly Drafts</strong>
-        <div style="margin-top:10px;">
-            <label>Billing month</label><br>
-            <input type="month" name="billing_month" value="<?= h((string)($filters['billing_month'] ?? date('Y-m'))) ?>">
+        <h2 class="card__title mt-0">Generate monthly drafts</h2>
+        <div class="field-row">
+            <div class="field">
+                <label>Billing month</label>
+                <input type="month" name="billing_month" value="<?= h((string)($filters['billing_month'] ?? date('Y-m'))) ?>">
+            </div>
         </div>
-        <button type="submit" style="margin-top:10px;">Generate invoices</button>
+        <div class="form-actions">
+            <button type="submit">Generate invoices</button>
+        </div>
     </form>
 
-    <form method="post" style="padding:12px;border:1px solid #ccc;">
+    <form method="post" class="card">
         <?= Csrf::input(); ?>
         <input type="hidden" name="action" value="check_overdue">
-        <strong>Overdue Check</strong>
-        <p style="margin:10px 0 0;">Marks sent invoices past due date as overdue.</p>
-        <button type="submit" style="margin-top:10px;">Check overdue</button>
+        <h2 class="card__title mt-0">Overdue check</h2>
+        <p class="muted">Marks sent invoices past due date as overdue.</p>
+        <div class="form-actions">
+            <button type="submit">Check overdue</button>
+        </div>
     </form>
 </div>
 
-<form method="get" style="margin-bottom:18px;padding:12px;border:1px solid #ccc;">
+<form method="get" class="filter-bar">
     <input type="hidden" name="page" value="admin_invoices">
-    <strong>Filters</strong>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;">
-        <div>
-            <label>Status</label><br>
+    <div class="filter-bar__title">Filters</div>
+    <div class="field-row">
+        <div class="field">
+            <label>Status</label>
             <select name="status">
                 <?php foreach (['ALL', 'DRAFT', 'SENT', 'PAID', 'OVERDUE'] as $status): ?>
                     <option value="<?= h($status) ?>" <?= strtoupper((string)($filters['status'] ?? '')) === $status ? 'selected' : '' ?>>
@@ -60,32 +64,34 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
                 <?php endforeach; ?>
             </select>
         </div>
-        <div>
-            <label>Billing month</label><br>
+        <div class="field">
+            <label>Billing month</label>
             <input type="month" name="billing_month" value="<?= h((string)($filters['billing_month'] ?? '')) ?>">
         </div>
-        <div>
-            <label>Supplier ID</label><br>
+        <div class="field">
+            <label>Supplier ID</label>
             <input type="number" name="supplier_id" min="1" step="1" value="<?= h((string)($filters['supplier_id'] ?? '')) ?>">
         </div>
-        <div>
-            <label>Invoice number</label><br>
+        <div class="field">
+            <label>Invoice number</label>
             <input name="invoice_number" value="<?= h((string)($filters['invoice_number'] ?? '')) ?>">
         </div>
     </div>
-    <button type="submit" style="margin-top:10px;">Apply filters</button>
-    <a href="?page=admin_invoices" style="margin-left:10px;">Reset</a>
+    <div class="filter-bar__actions">
+        <button type="submit">Apply filters</button>
+        <a href="?page=admin_invoices" class="muted small">Reset</a>
+    </div>
 </form>
 
 <?php if (!$rows): ?>
-    <p>No invoices found.</p>
+    <div class="card card--muted"><p class="mb-0 muted">No invoices found.</p></div>
 <?php else: ?>
     <table>
         <thead>
             <tr>
                 <th>Invoice</th>
                 <th>Supplier</th>
-                <th>Billing Month</th>
+                <th>Billing month</th>
                 <th>Status</th>
                 <th>Issue</th>
                 <th>Due</th>
@@ -100,13 +106,12 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
                     <td><?= h((string)$row['supplier_name_snapshot']) ?> (#<?= (int)$row['supplier_id'] ?>)</td>
                     <td><?= sprintf('%04d-%02d', (int)$row['billing_year'], (int)$row['billing_month']) ?></td>
                     <td><?= $badge((string)$row['status']) ?></td>
-                    <td><?= h((string)$row['issue_date']) ?></td>
-                    <td><?= h((string)$row['due_date']) ?></td>
+                    <td class="muted small"><?= h((string)$row['issue_date']) ?></td>
+                    <td class="muted small"><?= h((string)$row['due_date']) ?></td>
                     <td><?= $money($row['total_amount']) ?> <?= h((string)$row['currency_code']) ?></td>
-                    <td>
-                        <a href="?page=admin_invoice_view&id=<?= (int)$row['id'] ?>">Open</a>
-                        |
-                        <a href="?page=invoice_pdf&id=<?= (int)$row['id'] ?>">PDF</a>
+                    <td class="actions-inline">
+                        <a href="?page=admin_invoice_view&amp;id=<?= (int)$row['id'] ?>">Open</a>
+                        <a href="?page=invoice_pdf&amp;id=<?= (int)$row['id'] ?>">PDF</a>
                     </td>
                 </tr>
             <?php endforeach; ?>

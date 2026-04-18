@@ -115,6 +115,98 @@ Suppliers never see other suppliers' data. All access checks run in the controll
 
 The **Marketplace** page is accessible without login and lists every approved, active advertisement whose validity window covers today. Visitors can filter by search text and category, and open a detail page for each ad. Every marketplace page view records an impression per listed ad; every detail page view records a click. Those counters roll up into `ad_daily_stats` and feed the supplier and admin dashboards.
 
+## Shop JSON API
+
+The portal also exposes the same public marketplace data as a small read-only JSON API so an external frontend (for example the `hedvc.com` shop page maintained by the UI team) can render the catalogue without scraping the portal's HTML. This is the "REST API for mobile app integration" listed as an optional extension in the specification, kept minimal and strictly read-only — there is no mutation surface, no auth endpoint, no user data.
+
+All endpoints are `GET`, return `application/json`, and sit under the same `?page=` entry point as the rest of the portal. The tracking semantics mirror the HTML marketplace: listing an ad records an impression, fetching a single ad records a click. Clients that only want to inspect data (or poll periodically without skewing stats) can pass `&track=0`.
+
+### Endpoints
+
+| Method + route | Purpose |
+|---|---|
+| `GET /?page=api_shop_ads` | List all approved, active, in-window ads. Optional filters: `search=<text>`, `category_id=<int>`. Records impressions unless `track=0`. |
+| `GET /?page=api_shop_ad&id=<int>` | Single ad detail. Records a click unless `track=0`. Returns `404` if missing or not publicly visible. |
+| `GET /?page=api_shop_categories` | All ad categories. |
+| `GET /?page=api_shop_supplier_logo&id=<int>` | Supplier logo binary (PNG/JPG/WebP) with the supplier's upload MIME type. Returns `404` if the supplier has no logo. |
+
+### Example response shape
+
+`GET /?page=api_shop_ads`:
+
+```json
+{
+  "filters": { "search": "", "category_id": null },
+  "count": 2,
+  "ads": [
+    {
+      "id": 42,
+      "title": "Spring wellness package",
+      "description": "...",
+      "category": { "id": 3, "name": "Health" },
+      "supplier": {
+        "id": 12,
+        "name": "Example Clinic AB",
+        "homepage": "https://example.com",
+        "logo_url": "?page=api_shop_supplier_logo&id=12&v=2026-04-10%2012%3A04%3A55"
+      },
+      "price": { "model": "FIXED_DISCOUNT", "model_label": "Fixed discount", "text": "20% off" },
+      "validity": { "from": "2026-04-01", "to": "2026-06-30" },
+      "updated_at": "2026-04-10 12:04:55"
+    }
+  ]
+}
+```
+
+Errors are always JSON:
+
+```json
+{ "error": { "status": 404, "message": "Advertisement not found." } }
+```
+
+### Consuming the API from an external frontend
+
+A minimal fetch from a browser running on a different origin:
+
+```js
+const PORTAL = 'https://portal.example.com';
+
+async function loadShop() {
+  const res = await fetch(`${PORTAL}/?page=api_shop_ads&track=0`);
+  const { ads } = await res.json();
+  // render ads — each ad has .title, .description, .supplier.logo_url, .price.text, etc.
+}
+
+async function openAd(id) {
+  const res = await fetch(`${PORTAL}/?page=api_shop_ad&id=${id}`);
+  const { ad } = await res.json();
+  // this one DOES record a click — use it when the user actually opens the detail view
+}
+```
+
+`logo_url` is returned as a relative path. Prefix it with the portal origin (or configure `portal.base_url` in `app/config/config.local.php` so the API returns absolute URLs).
+
+### CORS configuration
+
+The API endpoints override the portal's default same-origin CORP header so cross-origin clients can read them. Allowed origins are configured in `app/config/config.local.php`:
+
+```php
+'api' => [
+    // default: allow any origin (suitable for a public shop catalogue)
+    'cors_allowed_origins' => ['*'],
+    // or restrict to a specific front-end:
+    // 'cors_allowed_origins' => ['https://hedvc.com', 'https://www.hedvc.com'],
+],
+```
+
+When a concrete list is set, only matching `Origin` headers are echoed back in `Access-Control-Allow-Origin`, with `Vary: Origin` for caches. `OPTIONS` preflights are handled automatically.
+
+### What the API deliberately does not do
+
+- No write operations, no auth endpoints, no user/invoice data.
+- No pagination yet — marketplace volume is small in the thesis scope; add `limit`/`offset` parameters if the catalogue grows.
+- No rate limiting — the portal assumes a small trusted consumer. For a production deployment, put the portal behind the reverse proxy's rate-limit layer.
+
 ## Encryption at rest
 
 Sensitive supplier-profile PII is encrypted before it hits MariaDB and decrypted on read. Auth data, ads, invoice metadata, routing, and joins stay in plaintext.

@@ -1,35 +1,34 @@
 <?php
 $badge = static function (string $status): string {
     $status = strtoupper($status);
-
-    return match ($status) {
-        'APPROVED' => '<span style="padding:2px 6px;border:1px solid #080;background:#efe;">APPROVED</span>',
-        'PENDING' => '<span style="padding:2px 6px;border:1px solid #aa0;background:#fffbdd;">PENDING</span>',
-        'REJECTED' => '<span style="padding:2px 6px;border:1px solid #a00;background:#fee;">REJECTED</span>',
-        default => '<span style="padding:2px 6px;border:1px solid #888;background:#f6f6f6;">DRAFT</span>',
+    $cls = match ($status) {
+        'APPROVED' => 'badge--approved',
+        'PENDING' => 'badge--pending',
+        'REJECTED' => 'badge--rejected',
+        default => 'badge--draft',
     };
+    return '<span class="badge ' . $cls . '">' . h($status ?: 'DRAFT') . '</span>';
 };
 ?>
-<h1>My Ads</h1>
+<div class="page-header">
+    <h1>My ads</h1>
+    <div class="page-header__actions">
+        <a href="?page=ad_create"><button type="button">+ Create ad</button></a>
+    </div>
+</div>
 
 <?php if ($deleted): ?>
-    <div style="padding:8px;border:1px solid #080;background:#efe;margin-bottom:12px;">
-        Advertisement deleted successfully.
-    </div>
+    <div class="alert alert--success">Advertisement deleted successfully.</div>
 <?php endif; ?>
 
 <?php if ($error): ?>
-    <div style="padding:8px;border:1px solid #a00;background:#fee;margin-bottom:12px;">
-        <?= h($error) ?>
-    </div>
+    <div class="alert alert--error"><?= h($error) ?></div>
 <?php endif; ?>
 
-<p>
-    <a href="?page=ad_create">+ Create new ad</a>
-</p>
-
 <?php if (!$rows): ?>
-    <p>No ads yet.</p>
+    <div class="card card--muted">
+        <p class="mb-0 muted">No ads yet.</p>
+    </div>
 <?php else: ?>
     <table>
         <thead>
@@ -37,7 +36,7 @@ $badge = static function (string $status): string {
                 <th>ID</th>
                 <th>Category</th>
                 <th>Title</th>
-                <th>Price Model</th>
+                <th>Price model</th>
                 <th>Status</th>
                 <th>Active</th>
                 <th>Updated</th>
@@ -57,32 +56,34 @@ $badge = static function (string $status): string {
                     <td><?= h((string)$row['title']) ?></td>
                     <td><?= h(AdsService::priceModelLabel((string)($row['price_model_type'] ?? '')) ?: '-') ?></td>
                     <td><?= $badge($status) ?></td>
-                    <td><?= $isActive ? 'yes' : 'no' ?></td>
-                    <td><?= h((string)$row['updated_at']) ?></td>
+                    <td><?= $isActive ? 'Yes' : 'No' ?></td>
+                    <td class="muted small"><?= h((string)$row['updated_at']) ?></td>
                     <td>
-                        <a href="?page=ad_edit&id=<?= $id ?>">Edit / View</a>
+                        <div class="actions-inline">
+                            <a href="?page=ad_edit&amp;id=<?= $id ?>" class="muted small">Edit</a>
 
-                        <?php if (strtoupper($status) === 'APPROVED'): ?>
-                            <form method="post" action="?page=ad_toggle" style="display:inline;">
-                                <?= Csrf::input(); ?>
-                                <input type="hidden" name="id" value="<?= $id ?>">
-                                <input type="hidden" name="active" value="<?= $isActive ? 0 : 1 ?>">
-                                <button type="submit"><?= $isActive ? 'Deactivate' : 'Activate' ?></button>
-                            </form>
-                        <?php elseif (in_array(strtoupper($status), ['DRAFT', 'REJECTED'], true)): ?>
-                            <form method="post" action="?page=ad_edit&id=<?= $id ?>" style="display:inline;">
-                                <?= Csrf::input(); ?>
-                                <input type="hidden" name="action" value="submit">
-                                <button type="submit">Submit</button>
-                            </form>
-                            <form method="post" action="?page=ad_delete" style="display:inline;" data-confirm="Delete this ad?">
-                                <?= Csrf::input(); ?>
-                                <input type="hidden" name="id" value="<?= $id ?>">
-                                <button type="submit">Delete</button>
-                            </form>
-                        <?php else: ?>
-                            <span style="opacity:.8;">(Waiting review)</span>
-                        <?php endif; ?>
+                            <?php if (strtoupper($status) === 'APPROVED'): ?>
+                                <form method="post" action="?page=ad_toggle" class="inline-form">
+                                    <?= Csrf::input(); ?>
+                                    <input type="hidden" name="id" value="<?= $id ?>">
+                                    <input type="hidden" name="active" value="<?= $isActive ? 0 : 1 ?>">
+                                    <button type="submit" class="btn-secondary"><?= $isActive ? 'Deactivate' : 'Activate' ?></button>
+                                </form>
+                            <?php elseif (in_array(strtoupper($status), ['DRAFT', 'REJECTED'], true)): ?>
+                                <form method="post" action="?page=ad_edit&amp;id=<?= $id ?>" class="inline-form">
+                                    <?= Csrf::input(); ?>
+                                    <input type="hidden" name="action" value="submit">
+                                    <button type="submit" class="btn-secondary">Submit</button>
+                                </form>
+                                <form method="post" action="?page=ad_delete" class="inline-form" data-confirm="Delete this ad?">
+                                    <?= Csrf::input(); ?>
+                                    <input type="hidden" name="id" value="<?= $id ?>">
+                                    <button type="submit" class="btn-danger">Delete</button>
+                                </form>
+                            <?php else: ?>
+                                <span class="muted small">(Waiting review)</span>
+                            <?php endif; ?>
+                        </div>
                     </td>
                 </tr>
             <?php endforeach; ?>

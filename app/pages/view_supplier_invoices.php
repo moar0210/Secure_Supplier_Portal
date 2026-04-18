@@ -1,54 +1,57 @@
 <?php
 $badge = static function (string $status): string {
     $status = strtoupper($status);
-
-    return match ($status) {
-        'PAID' => '<span style="padding:2px 6px;border:1px solid #080;background:#efe;">PAID</span>',
-        'SENT' => '<span style="padding:2px 6px;border:1px solid #0a5;background:#e7f6ff;">SENT</span>',
-        'OVERDUE' => '<span style="padding:2px 6px;border:1px solid #a00;background:#fee;">OVERDUE</span>',
-        default => '<span style="padding:2px 6px;border:1px solid #888;background:#f6f6f6;">DRAFT</span>',
+    $cls = match ($status) {
+        'PAID' => 'badge--paid',
+        'SENT' => 'badge--sent',
+        'OVERDUE' => 'badge--overdue',
+        default => 'badge--draft',
     };
+    return '<span class="badge ' . $cls . '">' . h($status ?: 'DRAFT') . '</span>';
 };
 $money = static fn(mixed $value): string => number_format((float)$value, 2);
 ?>
-<h1>My Invoices</h1>
+<div class="page-header">
+    <h1>My invoices</h1>
+</div>
 
 <?php if (!empty($error)): ?>
-    <div style="padding:8px;border:1px solid #a00;background:#fee;margin-bottom:12px;">
-        <?= h((string)$error) ?>
-    </div>
+    <div class="alert alert--error"><?= h((string)$error) ?></div>
 <?php endif; ?>
 
-<form method="get" style="margin-bottom:18px;padding:12px;border:1px solid #ccc;">
+<form method="get" class="filter-bar">
     <input type="hidden" name="page" value="supplier_invoices">
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-        <div>
-            <label>Status</label><br>
+    <div class="filter-bar__title">Filters</div>
+    <div class="field-row">
+        <div class="field">
+            <label>Status</label>
             <select name="status">
-                <?php foreach (['ALL', 'DRAFT', 'SENT', 'PAID', 'OVERDUE'] as $status): ?>
-                    <option value="<?= h($status) ?>" <?= strtoupper((string)($filters['status'] ?? '')) === $status ? 'selected' : '' ?>>
-                        <?= h($status) ?>
+                <?php foreach (['ALL', 'DRAFT', 'SENT', 'PAID', 'OVERDUE'] as $statusOption): ?>
+                    <option value="<?= h($statusOption) ?>" <?= strtoupper((string)($filters['status'] ?? '')) === $statusOption ? 'selected' : '' ?>>
+                        <?= h($statusOption) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
         </div>
-        <div>
-            <label>Billing month</label><br>
+        <div class="field">
+            <label>Billing month</label>
             <input type="month" name="billing_month" value="<?= h((string)($filters['billing_month'] ?? '')) ?>">
         </div>
     </div>
-    <button type="submit" style="margin-top:10px;">Apply filters</button>
-    <a href="?page=supplier_invoices" style="margin-left:10px;">Reset</a>
+    <div class="filter-bar__actions">
+        <button type="submit">Apply filters</button>
+        <a href="?page=supplier_invoices" class="muted small">Reset</a>
+    </div>
 </form>
 
 <?php if (!$rows): ?>
-    <p>No invoices available.</p>
+    <div class="card card--muted"><p class="mb-0 muted">No invoices available.</p></div>
 <?php else: ?>
     <table>
         <thead>
             <tr>
                 <th>Invoice</th>
-                <th>Billing Month</th>
+                <th>Billing month</th>
                 <th>Status</th>
                 <th>Issue</th>
                 <th>Due</th>
@@ -62,10 +65,10 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
                     <td><?= h((string)$row['invoice_number']) ?></td>
                     <td><?= sprintf('%04d-%02d', (int)$row['billing_year'], (int)$row['billing_month']) ?></td>
                     <td><?= $badge((string)$row['status']) ?></td>
-                    <td><?= h((string)$row['issue_date']) ?></td>
-                    <td><?= h((string)$row['due_date']) ?></td>
+                    <td class="muted small"><?= h((string)$row['issue_date']) ?></td>
+                    <td class="muted small"><?= h((string)$row['due_date']) ?></td>
                     <td><?= $money($row['total_amount']) ?> <?= h((string)$row['currency_code']) ?></td>
-                    <td><a href="?page=invoice_pdf&id=<?= (int)$row['id'] ?>">Download</a></td>
+                    <td><a href="?page=invoice_pdf&amp;id=<?= (int)$row['id'] ?>">Download</a></td>
                 </tr>
             <?php endforeach; ?>
         </tbody>

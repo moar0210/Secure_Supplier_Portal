@@ -1,6 +1,8 @@
-<h1>Security Check</h1>
+<div class="page-header">
+    <h1>Security check</h1>
+</div>
 
-<p>This page is for verifying session + security baseline behavior.</p>
+<p class="muted">This page verifies session and security baseline behavior.</p>
 
 <h2>Session</h2>
 <table>
@@ -39,20 +41,22 @@
         </tr>
         <tr>
             <th>Last activity</th>
-            <td><?= h($lastStr) ?></td>
+            <td class="muted small"><?= h($lastStr) ?></td>
         </tr>
     </tbody>
 </table>
 
 <h2>Headers</h2>
-<p>Open DevTools -> Network -> this request -> Response Headers and verify:</p>
-<ul>
-    <li>Content-Security-Policy</li>
-    <li>X-Content-Type-Options</li>
-    <li>Referrer-Policy</li>
-    <li>X-Frame-Options</li>
-    <li>Permissions-Policy (optional)</li>
-</ul>
+<div class="card card--muted">
+    <p class="mb-0">Open DevTools &rarr; Network &rarr; this request &rarr; Response Headers and verify:</p>
+    <ul class="mb-0 mt-3">
+        <li>Content-Security-Policy</li>
+        <li>X-Content-Type-Options</li>
+        <li>Referrer-Policy</li>
+        <li>X-Frame-Options</li>
+        <li>Permissions-Policy (optional)</li>
+    </ul>
+</div>
 
 <h2>Encryption</h2>
 <table>
@@ -77,13 +81,15 @@
 </table>
 
 <h2>Notes</h2>
-<ul>
-    <li><strong>Secure cookie</strong> will be false on HTTP localhost; it becomes true on HTTPS.</li>
-    <li>If inactivity timeout is enabled, staying idle past the threshold should redirect to <code>?page=login&amp;timeout=1</code>.</li>
-    <li>This page exposes only safe encryption metadata. It never shows real keys, ciphertext, or decrypted supplier data.</li>
-    <li>The configured key count is only a count. It does not reveal any key material.</li>
-    <li>Operational key setup and rotation notes are documented in the README.</li>
-    <?php if (!$cryptoEnabled): ?>
-        <li>Encryption is currently disabled, so new sensitive profile writes are not protected at rest until <code>crypto.enabled</code> is turned on.</li>
-    <?php endif; ?>
-</ul>
+<div class="card card--muted">
+    <ul class="mb-0">
+        <li><strong>Secure cookie</strong> will be false on HTTP localhost; it becomes true on HTTPS.</li>
+        <li>If inactivity timeout is enabled, staying idle past the threshold should redirect to <code>?page=login&amp;timeout=1</code>.</li>
+        <li>This page exposes only safe encryption metadata. It never shows real keys, ciphertext, or decrypted supplier data.</li>
+        <li>The configured key count is only a count. It does not reveal any key material.</li>
+        <li>Operational key setup and rotation notes are documented in the README.</li>
+        <?php if (!$cryptoEnabled): ?>
+            <li>Encryption is currently disabled, so new sensitive profile writes are not protected at rest until <code>crypto.enabled</code> is turned on.</li>
+        <?php endif; ?>
+    </ul>
+</div>

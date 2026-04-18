@@ -1,2 +1,4 @@
-<h1>DB Test</h1>
-<p>DB connection OK. Server time: <?= h($serverTime) ?></p>
+<h1>Database test</h1>
+<div class="card">
+    <p class="mb-0">DB connection OK. Server time: <strong><?= h($serverTime) ?></strong></p>
+</div>

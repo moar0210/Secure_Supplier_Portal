@@ -1,24 +1,34 @@
-<h1>Admin - Ads Queue</h1>
+<div class="page-header">
+    <h1>Ads queue</h1>
+</div>
 
-<p>
-    Filter:
+<div class="tag-filter">
     <?php foreach ($allowed as $allowedStatus): ?>
-        <a href="?page=admin_ads_queue&status=<?= h($allowedStatus) ?>"
-           style="margin-right:10px;<?= $allowedStatus === $status ? 'font-weight:bold;text-decoration:underline;' : '' ?>">
+        <a href="?page=admin_ads_queue&amp;status=<?= h($allowedStatus) ?>" class="<?= $allowedStatus === $status ? 'is-active' : '' ?>">
             <?= h($allowedStatus) ?>
         </a>
     <?php endforeach; ?>
-</p>
+</div>
 
 <?php if ($error): ?>
-    <div style="padding:8px;border:1px solid #a00;background:#fee;">
-        <?= h($error) ?>
-    </div>
+    <div class="alert alert--error"><?= h($error) ?></div>
 <?php endif; ?>
 
 <?php if (!$rows): ?>
-    <p>No ads found for this filter.</p>
+    <div class="card card--muted"><p class="mb-0 muted">No ads found for this filter.</p></div>
 <?php else: ?>
+    <?php
+    $badge = static function (string $status): string {
+        $status = strtoupper($status);
+        $cls = match ($status) {
+            'APPROVED' => 'badge--approved',
+            'PENDING' => 'badge--pending',
+            'REJECTED' => 'badge--rejected',
+            default => 'badge--draft',
+        };
+        return '<span class="badge ' . $cls . '">' . h($status) . '</span>';
+    };
+    ?>
     <table>
         <thead>
             <tr>
@@ -39,11 +49,11 @@
                     <td><?= h((string)($row['supplier_name'] ?? '')) ?> (#<?= (int)$row['supplier_id'] ?>)</td>
                     <td><?= h((string)($row['category_name'] ?? '-')) ?></td>
                     <td><?= h((string)$row['title']) ?></td>
-                    <td><?= h((string)$row['status']) ?></td>
-                    <td><?= !empty($row['is_active']) ? 'yes' : 'no' ?></td>
-                    <td><?= h((string)$row['updated_at']) ?></td>
+                    <td><?= $badge((string)$row['status']) ?></td>
+                    <td><?= !empty($row['is_active']) ? 'Yes' : 'No' ?></td>
+                    <td class="muted small"><?= h((string)$row['updated_at']) ?></td>
                     <td>
-                        <a href="?page=admin_ad_review&id=<?= (int)$row['id'] ?>">Review</a>
+                        <a href="?page=admin_ad_review&amp;id=<?= (int)$row['id'] ?>">Review</a>
                     </td>
                 </tr>
             <?php endforeach; ?>

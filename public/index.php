@@ -56,6 +56,7 @@ require $root . '/app/lib/AdminController.php';
 require $root . '/app/lib/InvoiceController.php';
 require $root . '/app/lib/UserController.php';
 require $root . '/app/lib/StatsController.php';
+require $root . '/app/lib/ApiController.php';
 
 $auth = new Auth($pdo);
 $adsService = new AdsService($pdo);
@@ -72,6 +73,7 @@ $adminController = new AdminController($view, $auth, $db, $crypto, $adsService, 
 $invoiceController = new InvoiceController($view, $auth, $db, $crypto, $adsService, $supplierService, $config);
 $userController = new UserController($view, $auth, $db, $crypto, $adsService, $supplierService, $portalUserService, $config);
 $statsController = new StatsController($view, $auth, $db, $crypto, $adsService, $supplierService, $statsService, $config);
+$apiController = new ApiController($view, $auth, $db, $crypto, $adsService, $supplierService, $statsService, $config);
 
 $page = (string)($_GET['page'] ?? 'home');
 
@@ -111,6 +113,10 @@ $routes = [
     'supplier_invoices' => [$invoiceController, 'supplierInvoices'],
     'supplier_stats' => [$statsController, 'supplierStats'],
     'invoice_pdf' => [$invoiceController, 'pdf'],
+    'api_shop_ads' => [$apiController, 'shopAds'],
+    'api_shop_ad' => [$apiController, 'shopAd'],
+    'api_shop_categories' => [$apiController, 'shopCategories'],
+    'api_shop_supplier_logo' => [$apiController, 'shopSupplierLogo'],
 ];
 
 $handler = $routes[$page] ?? [$staticController, 'notFound'];

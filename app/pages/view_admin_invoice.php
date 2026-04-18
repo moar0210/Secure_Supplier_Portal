@@ -1,24 +1,26 @@
 <?php
 $money = static fn(mixed $value): string => number_format((float)$value, 2);
+$badgeClass = match (strtoupper((string)$invoice['status'])) {
+    'PAID' => 'badge--paid',
+    'SENT' => 'badge--sent',
+    'OVERDUE' => 'badge--overdue',
+    default => 'badge--draft',
+};
 ?>
-<h1>Invoice <?= h((string)$invoice['invoice_number']) ?></h1>
-
-<p>
-    <a href="?page=admin_invoices">Back to invoices</a>
-    |
-    <a href="?page=invoice_pdf&id=<?= (int)$invoice['id'] ?>">Download PDF</a>
-</p>
+<div class="page-header">
+    <h1>Invoice <?= h((string)$invoice['invoice_number']) ?></h1>
+    <div class="page-header__actions">
+        <a href="?page=admin_invoices" class="muted small">&larr; Back to invoices</a>
+        <a href="?page=invoice_pdf&amp;id=<?= (int)$invoice['id'] ?>">Download PDF</a>
+    </div>
+</div>
 
 <?php if ($notice): ?>
-    <div style="padding:8px;border:1px solid #080;background:#efe;margin-bottom:12px;">
-        <?= h($notice) ?>
-    </div>
+    <div class="alert alert--success"><?= h((string)$notice) ?></div>
 <?php endif; ?>
 
 <?php if ($error): ?>
-    <div style="padding:8px;border:1px solid #a00;background:#fee;margin-bottom:12px;">
-        <?= h($error) ?>
-    </div>
+    <div class="alert alert--error"><?= h((string)$error) ?></div>
 <?php endif; ?>
 
 <table>
@@ -53,7 +55,7 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
         </tr>
         <tr>
             <th>Status</th>
-            <td><strong><?= h((string)$invoice['status']) ?></strong></td>
+            <td><span class="badge <?= $badgeClass ?>"><?= h((string)$invoice['status']) ?></span></td>
         </tr>
         <tr>
             <th>Issue date</th>
@@ -72,15 +74,15 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
             <td>
                 Subtotal: <?= $money($invoice['subtotal_amount']) ?> <?= h((string)$invoice['currency_code']) ?><br>
                 VAT: <?= $money($invoice['vat_amount']) ?> <?= h((string)$invoice['currency_code']) ?> (<?= $money($invoice['vat_rate']) ?>%)<br>
-                Total: <?= $money($invoice['total_amount']) ?> <?= h((string)$invoice['currency_code']) ?>
+                <strong>Total: <?= $money($invoice['total_amount']) ?> <?= h((string)$invoice['currency_code']) ?></strong>
             </td>
         </tr>
     </tbody>
 </table>
 
-<h2>Line Items</h2>
+<h2>Line items</h2>
 <?php if (!$invoice['lines']): ?>
-    <p>No line items found.</p>
+    <div class="card card--muted"><p class="mb-0 muted">No line items found.</p></div>
 <?php else: ?>
     <table>
         <thead>
@@ -99,11 +101,11 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
                     <td>
                         <?= h((string)$line['ad_title']) ?>
                         <?php if (!empty($line['line_type']) && (string)$line['line_type'] !== 'ADVERTISEMENT'): ?>
-                            <br><span style="opacity:.75;"><?= h((string)$line['line_type']) ?></span>
+                            <br><span class="muted small"><?= h((string)$line['line_type']) ?></span>
                         <?php endif; ?>
                     </td>
                     <td><?= h((string)$line['description']) ?></td>
-                    <td><?= h((string)$line['line_period_start']) ?> to <?= h((string)$line['line_period_end']) ?></td>
+                    <td class="muted small"><?= h((string)$line['line_period_start']) ?> &rarr; <?= h((string)$line['line_period_end']) ?></td>
                     <td><?= $money($line['net_amount']) ?> <?= h((string)$invoice['currency_code']) ?></td>
                     <td><?= $money($line['vat_amount']) ?> <?= h((string)$invoice['currency_code']) ?></td>
                     <td><?= $money($line['gross_amount']) ?> <?= h((string)$invoice['currency_code']) ?></td>
@@ -114,44 +116,49 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
 <?php endif; ?>
 
 <?php if ((string)$invoice['status'] === 'DRAFT'): ?>
-    <h2>Send Invoice</h2>
-    <form method="post">
-        <?= Csrf::input(); ?>
-        <input type="hidden" name="action" value="mark_sent">
-        <button type="submit">Mark as sent</button>
-    </form>
-
-    <form method="post" style="margin-top:10px;" data-confirm="Delete this draft invoice?">
-        <?= Csrf::input(); ?>
-        <input type="hidden" name="action" value="delete_draft">
-        <button type="submit">Delete draft invoice</button>
-    </form>
+    <h2>Send invoice</h2>
+    <div class="actions-inline mb-5">
+        <form method="post" class="inline-form">
+            <?= Csrf::input(); ?>
+            <input type="hidden" name="action" value="mark_sent">
+            <button type="submit">Mark as sent</button>
+        </form>
+        <form method="post" class="inline-form" data-confirm="Delete this draft invoice?">
+            <?= Csrf::input(); ?>
+            <input type="hidden" name="action" value="delete_draft">
+            <button type="submit" class="btn-danger">Delete draft invoice</button>
+        </form>
+    </div>
 <?php endif; ?>
 
 <?php if (in_array((string)$invoice['status'], ['SENT', 'OVERDUE'], true)): ?>
-    <h2>Record Payment</h2>
-    <form method="post">
+    <h2>Record payment</h2>
+    <form method="post" class="card mb-5">
         <?= Csrf::input(); ?>
         <input type="hidden" name="action" value="record_payment">
-        <div style="margin:10px 0;">
-            <label>Amount</label><br>
-            <input type="number" name="amount" min="0" step="0.01" required value="<?= h($money($invoice['total_amount'])) ?>">
+        <div class="field-row">
+            <div class="field">
+                <label>Amount</label>
+                <input type="number" name="amount" min="0" step="0.01" required value="<?= h($money($invoice['total_amount'])) ?>">
+            </div>
+            <div class="field">
+                <label>Payment date</label>
+                <input type="date" name="payment_date" required value="<?= h(date('Y-m-d')) ?>">
+            </div>
+            <div class="field">
+                <label>Method</label>
+                <input name="payment_method" required maxlength="100" placeholder="Bank transfer">
+            </div>
         </div>
-        <div style="margin:10px 0;">
-            <label>Payment date</label><br>
-            <input type="date" name="payment_date" required value="<?= h(date('Y-m-d')) ?>">
+        <div class="form-actions">
+            <button type="submit">Record payment</button>
         </div>
-        <div style="margin:10px 0;">
-            <label>Method</label><br>
-            <input name="payment_method" required maxlength="100" placeholder="Bank transfer">
-        </div>
-        <button type="submit">Record payment</button>
     </form>
 <?php endif; ?>
 
 <h2>Payment</h2>
 <?php if (!$invoice['payment']): ?>
-    <p>No payment recorded.</p>
+    <div class="card card--muted"><p class="mb-0 muted">No payment recorded.</p></div>
 <?php else: ?>
     <table>
         <tbody>
@@ -171,9 +178,9 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
     </table>
 <?php endif; ?>
 
-<h2>Status History</h2>
+<h2>Status history</h2>
 <?php if (!$invoice['status_history']): ?>
-    <p>No history rows found.</p>
+    <div class="card card--muted"><p class="mb-0 muted">No history rows found.</p></div>
 <?php else: ?>
     <table>
         <thead>
@@ -188,7 +195,7 @@ $money = static fn(mixed $value): string => number_format((float)$value, 2);
         <tbody>
             <?php foreach ($invoice['status_history'] as $entry): ?>
                 <tr>
-                    <td><?= h((string)$entry['changed_at']) ?></td>
+                    <td class="muted small"><?= h((string)$entry['changed_at']) ?></td>
                     <td><?= h((string)($entry['old_status'] ?? '')) ?></td>
                     <td><?= h((string)$entry['new_status']) ?></td>
                     <td><?= h((string)($entry['username'] ?? '')) ?></td>

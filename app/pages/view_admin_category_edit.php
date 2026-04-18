@@ -1,17 +1,24 @@
-<h1>Rename category #<?= (int)$categoryId ?></h1>
+<div class="page-header">
+    <h1>Rename category #<?= (int)$categoryId ?></h1>
+    <div class="page-header__actions">
+        <a href="?page=admin_categories" class="muted small">&larr; Back to categories</a>
+    </div>
+</div>
 
 <?php if ($error): ?>
-    <div style="padding:8px;border:1px solid #a00;background:#fee;margin-bottom:12px;">
-        <?= h($error) ?>
-    </div>
+    <div class="alert alert--error"><?= h($error) ?></div>
 <?php endif; ?>
 
-<form method="post">
+<form method="post" class="card">
     <?= Csrf::input(); ?>
-    <div>
-        <label>Name</label><br>
-        <input name="name" required maxlength="100" style="width:320px;" value="<?= h((string)$current['name']) ?>">
+    <div class="field-row">
+        <div class="field">
+            <label>Name</label>
+            <input name="name" required maxlength="100" value="<?= h((string)$current['name']) ?>">
+        </div>
     </div>
-    <button type="submit">Save</button>
-    <a href="?page=admin_categories" style="margin-left:10px;">Cancel</a>
+    <div class="form-actions">
+        <button type="submit">Save changes</button>
+        <a href="?page=admin_categories" class="muted small">Cancel</a>
+    </div>
 </form>

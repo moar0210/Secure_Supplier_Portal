@@ -1,28 +1,31 @@
 <?php $priceModels = AdsService::priceModelOptions(); ?>
-<h1>Create Ad</h1>
+<div class="page-header">
+    <h1>Create ad</h1>
+    <div class="page-header__actions">
+        <a href="?page=ads_list" class="muted small">&larr; Back to my ads</a>
+    </div>
+</div>
 
 <?php if ($error): ?>
-    <div style="padding:8px;border:1px solid #a00;background:#fee;">
-        <?= h($error) ?>
-    </div>
+    <div class="alert alert--error"><?= h($error) ?></div>
 <?php endif; ?>
 
-<form method="post" autocomplete="off">
+<form method="post" autocomplete="off" class="form-stack">
     <?= Csrf::input(); ?>
 
-    <div style="margin:10px 0;">
-        <label>Title</label><br>
-        <input name="title" required maxlength="200" style="width:520px;" value="<?= h($form['title']) ?>">
+    <div class="field">
+        <label>Title</label>
+        <input name="title" required maxlength="200" value="<?= h($form['title']) ?>">
     </div>
 
-    <div style="margin:10px 0;">
-        <label>Description</label><br>
-        <textarea name="description" required maxlength="5000" rows="6" style="width:520px;"><?= h($form['description']) ?></textarea>
+    <div class="field">
+        <label>Description</label>
+        <textarea name="description" required maxlength="5000" rows="6"><?= h($form['description']) ?></textarea>
     </div>
 
-    <div style="margin:10px 0;">
-        <label>Category</label><br>
-        <select name="category_id" style="width:520px;">
+    <div class="field">
+        <label>Category</label>
+        <select name="category_id">
             <option value="">-</option>
             <?php foreach ($categories as $category): ?>
                 <?php $categoryId = (int)$category['id']; ?>
@@ -33,9 +36,9 @@
         </select>
     </div>
 
-    <div style="margin:10px 0;">
-        <label>Price model</label><br>
-        <select name="price_model_type" style="width:520px;">
+    <div class="field">
+        <label>Price model</label>
+        <select name="price_model_type">
             <option value="">Select a model</option>
             <?php foreach ($priceModels as $value => $label): ?>
                 <option value="<?= h($value) ?>" <?= $form['price_model_type'] === $value ? 'selected' : '' ?>>
@@ -45,24 +48,25 @@
         </select>
     </div>
 
-    <div style="margin:10px 0;">
-        <label>Offer details</label><br>
-        <input name="price_text" maxlength="200" style="width:520px;" value="<?= h($form['price_text']) ?>">
+    <div class="field">
+        <label>Offer details</label>
+        <input name="price_text" maxlength="200" value="<?= h($form['price_text']) ?>">
     </div>
 
-    <div style="margin:10px 0;">
-        <label>Valid from</label><br>
-        <input type="date" name="valid_from" value="<?= h($form['valid_from']) ?>">
+    <div class="field-row">
+        <div class="field">
+            <label>Valid from</label>
+            <input type="date" name="valid_from" value="<?= h($form['valid_from']) ?>">
+        </div>
+        <div class="field">
+            <label>Valid to</label>
+            <input type="date" name="valid_to" value="<?= h($form['valid_to']) ?>">
+        </div>
     </div>
 
-    <div style="margin:10px 0;">
-        <label>Valid to</label><br>
-        <input type="date" name="valid_to" value="<?= h($form['valid_to']) ?>">
-    </div>
-
-    <div style="margin-top:14px;">
-        <button type="submit" name="action" value="save_draft">Save Draft</button>
+    <div class="form-actions">
+        <button type="submit" name="action" value="save_draft" class="btn-secondary">Save draft</button>
         <button type="submit" name="action" value="submit">Submit for approval</button>
-        <a href="?page=ads_list" style="margin-left:10px;">Cancel</a>
+        <a href="?page=ads_list" class="muted small">Cancel</a>
     </div>
 </form>

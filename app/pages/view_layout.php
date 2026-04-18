@@ -1,125 +1,78 @@
-<!doctype html>
+<?php
+$currentPage = $currentPage ?? (string)($_GET['page'] ?? 'home');
+
+$navLink = static function (string $page, string $label) use ($currentPage): string {
+    $isActive = $currentPage === $page;
+    $class = $isActive ? ' class="is-active"' : '';
+    return '<a href="?page=' . h($page) . '"' . $class . '>' . h($label) . '</a>';
+};
+?><!doctype html>
 <html lang="en">
 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= h($title) ?></title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-        }
-
-        header {
-            background: #222;
-            color: #fff;
-            padding: 12px 16px;
-        }
-
-        nav a {
-            color: #fff;
-            margin-right: 12px;
-            text-decoration: none;
-        }
-
-        main {
-            padding: 16px;
-        }
-
-        table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-
-        th,
-        td {
-            border: 1px solid #ccc;
-            padding: 8px;
-            text-align: left;
-        }
-
-        th {
-            background: #f5f5f5;
-        }
-
-        .nav-right {
-            float: right;
-        }
-
-        .nav-right a {
-            margin-right: 0;
-            margin-left: 12px;
-        }
-
-        .logout-button {
-            background: none;
-            border: none;
-            color: #fff;
-            cursor: pointer;
-            font: inherit;
-            margin-left: 12px;
-            padding: 0;
-            text-decoration: underline;
-        }
-    </style>
+    <link rel="stylesheet" href="portal.css">
 </head>
 
 <body>
-    <header>
-        <strong>Supplier Portal</strong>
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a href="?page=home" class="site-header__brand">
+                <span class="site-header__brand-mark">&#9679;</span> Supplier Portal
+            </a>
 
-        <nav style="display:inline-block; margin-left:16px;">
-            <a href="?page=home">Home</a>
-            <a href="?page=marketplace">Marketplace</a>
+            <nav class="site-nav">
+                <?= $navLink('home', 'Home') ?>
+                <?= $navLink('marketplace', 'Marketplace') ?>
 
-            <?php if ($auth instanceof Auth && $auth->hasRole('ADMIN')): ?>
-                <a href="?page=dbtest">DB Test</a>
-                <a href="?page=suppliers">Suppliers</a>
-                <a href="?page=admin_users">Users</a>
-                <a href="?page=admin_ads_queue">Ads Queue</a>
-                <a href="?page=admin_reports">Reports</a>
-                <a href="?page=admin_invoices">Invoices</a>
-                <a href="?page=admin_pricing_rules">Pricing Rules</a>
-                <a href="?page=admin_categories">Categories</a>
-                <a href="?page=security_check">Security Check</a>
-                <a href="?page=admin">Admin</a>
-            <?php elseif ($auth instanceof Auth && $auth->hasRole('SUPPLIER')): ?>
-                <?php $sid = $auth->supplierId(); ?>
-                <?php if ($sid !== null): ?>
-                    <a href="?page=supplier&id=<?= (int)$sid ?>">My Profile</a>
-                    <a href="?page=supplier_users">Company Users</a>
-                    <a href="?page=ads_list">My Ads</a>
-                    <a href="?page=supplier_stats">Statistics</a>
-                    <a href="?page=supplier_invoices">My Invoices</a>
-                <?php else: ?>
-                    <span style="opacity:.8;">My Profile (unlinked)</span>
-                    <span style="opacity:.8;">Company Users (unlinked)</span>
-                    <span style="opacity:.8;">My Ads (unlinked)</span>
-                    <span style="opacity:.8;">Statistics (unlinked)</span>
-                    <span style="opacity:.8;">My Invoices (unlinked)</span>
+                <?php if ($auth instanceof Auth && $auth->hasRole('ADMIN')): ?>
+                    <?= $navLink('suppliers', 'Suppliers') ?>
+                    <?= $navLink('admin_users', 'Users') ?>
+                    <?= $navLink('admin_ads_queue', 'Ads Queue') ?>
+                    <?= $navLink('admin_reports', 'Reports') ?>
+                    <?= $navLink('admin_invoices', 'Invoices') ?>
+                    <?= $navLink('admin_pricing_rules', 'Pricing') ?>
+                    <?= $navLink('admin_categories', 'Categories') ?>
+                    <?= $navLink('security_check', 'Security') ?>
+                    <?= $navLink('dbtest', 'DB') ?>
+                <?php elseif ($auth instanceof Auth && $auth->hasRole('SUPPLIER')): ?>
+                    <?php $sid = $auth->supplierId(); ?>
+                    <?php if ($sid !== null): ?>
+                        <a href="?page=supplier&amp;id=<?= (int)$sid ?>"<?= $currentPage === 'supplier' ? ' class="is-active"' : '' ?>>My Profile</a>
+                        <?= $navLink('supplier_users', 'Company Users') ?>
+                        <?= $navLink('ads_list', 'My Ads') ?>
+                        <?= $navLink('supplier_stats', 'Statistics') ?>
+                        <?= $navLink('supplier_invoices', 'My Invoices') ?>
+                    <?php else: ?>
+                        <span class="site-nav__disabled">My Profile (unlinked)</span>
+                        <span class="site-nav__disabled">Company Users (unlinked)</span>
+                        <span class="site-nav__disabled">My Ads (unlinked)</span>
+                        <span class="site-nav__disabled">Statistics (unlinked)</span>
+                        <span class="site-nav__disabled">My Invoices (unlinked)</span>
+                    <?php endif; ?>
                 <?php endif; ?>
-            <?php endif; ?>
-        </nav>
+            </nav>
 
-        <nav class="nav-right">
-            <?php if ($auth instanceof Auth && $auth->isLoggedIn()): ?>
-                <span>Logged in as <strong><?= h((string)$auth->username()) ?></strong></span>
-                <form method="post" action="?page=logout" style="display:inline;">
-                    <?= Csrf::input(); ?>
-                    <button type="submit" class="logout-button">Logout</button>
-                </form>
-            <?php else: ?>
-                <a href="?page=login">Login</a>
-            <?php endif; ?>
-        </nav>
-
-        <div style="clear:both;"></div>
+            <div class="site-header__meta">
+                <?php if ($auth instanceof Auth && $auth->isLoggedIn()): ?>
+                    <span>Signed in as <strong><?= h((string)$auth->username()) ?></strong></span>
+                    <form method="post" action="?page=logout" class="inline-form">
+                        <?= Csrf::input(); ?>
+                        <button type="submit" class="logout-button">Sign out</button>
+                    </form>
+                <?php else: ?>
+                    <a href="?page=login">Sign in</a>
+                <?php endif; ?>
+            </div>
+        </div>
     </header>
 
     <main>
         <?= $content ?>
     </main>
+
     <script src="portal.js" defer></script>
 </body>
 
