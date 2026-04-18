@@ -58,7 +58,7 @@ final class UserController extends BaseController
                     }
 
                     $userId = (int)$userIdRaw;
-                    $this->portalUserService->updateUserAsAdmin($userId, $_POST);
+                    $this->portalUserService->updateUserAsAdmin($userId, $_POST, $this->auth->userId());
                     $this->logActivity('Portal user updated', [
                         'actor_user_id' => $this->auth->userId(),
                         'target_user_id' => $userId,

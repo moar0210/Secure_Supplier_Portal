@@ -12,7 +12,7 @@ foreach ($series as $row) {
     <h1>My statistics</h1>
 </div>
 
-<p class="muted">Visibility metrics are collected automatically from the public marketplace listing and advertisement detail views.</p>
+<p class="muted">Visibility metrics are collected automatically from the Shop JSON API — impressions from listing calls, clicks from ad-detail calls.</p>
 
 <form method="get" class="filter-bar">
     <input type="hidden" name="page" value="supplier_stats">

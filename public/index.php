@@ -79,8 +79,6 @@ $page = (string)($_GET['page'] ?? 'home');
 
 $routes = [
     'home' => [$staticController, 'home'],
-    'marketplace' => [$statsController, 'marketplace'],
-    'marketplace_ad' => [$statsController, 'marketplaceAd'],
     'dbtest' => [$staticController, 'dbtest'],
     'suppliers' => [$supplierController, 'index'],
     'supplier_create' => [$supplierController, 'create'],
@@ -91,6 +89,7 @@ $routes = [
     'logout' => [$authController, 'logout'],
     'reset_request' => [$authController, 'resetRequest'],
     'reset_password' => [$authController, 'resetPassword'],
+    'change_password' => [$authController, 'changePassword'],
     '403' => [$staticController, 'forbidden'],
     '404' => [$staticController, 'notFound'],
     'admin' => [$adminController, 'dashboard'],
@@ -118,6 +117,20 @@ $routes = [
     'api_shop_categories' => [$apiController, 'shopCategories'],
     'api_shop_supplier_logo' => [$apiController, 'shopSupplierLogo'],
 ];
+
+// Force users with must_change_password=1 into the change-password flow
+// before they can do anything else that mutates state.
+$passwordRotationExempt = [
+    'change_password',
+    'logout',
+    'login',
+    '403',
+    '404',
+];
+if ($auth->isLoggedIn() && $auth->mustChangePassword() && !in_array($page, $passwordRotationExempt, true)) {
+    header('Location: ?page=change_password');
+    exit;
+}
 
 $handler = $routes[$page] ?? [$staticController, 'notFound'];
 try {

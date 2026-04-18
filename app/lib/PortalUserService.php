@@ -182,7 +182,7 @@ final class PortalUserService
         }
     }
 
-    public function updateUserAsAdmin(int $userId, array $input): void
+    public function updateUserAsAdmin(int $userId, array $input, ?int $actorUserId = null): void
     {
         $existing = $this->getUser($userId);
         if ($existing === null) {
@@ -190,6 +190,24 @@ final class PortalUserService
         }
 
         $clean = $this->normalizeInput($input, true, false, null, $userId);
+
+        if ($actorUserId !== null && $actorUserId === $userId) {
+            $existingRoles = (array)($existing['roles'] ?? []);
+            $wasAdmin = in_array('ADMIN', array_map('strtoupper', $existingRoles), true);
+            if ($wasAdmin && $clean['role_name'] !== 'ADMIN') {
+                throw new UserFacingException('You cannot remove your own ADMIN role. Ask another admin to do it.');
+            }
+            if ($clean['is_active'] !== 1) {
+                throw new UserFacingException('You cannot deactivate your own account.');
+            }
+        }
+
+        if ($clean['role_name'] !== 'ADMIN') {
+            $this->assertNotLastActiveAdmin($userId);
+        }
+        if ($clean['is_active'] !== 1) {
+            $this->assertNotLastActiveAdmin($userId);
+        }
 
         $this->pdo->beginTransaction();
 
@@ -472,6 +490,24 @@ final class PortalUserService
 
         if ($stmt->fetchColumn()) {
             throw new UserFacingException('That email address is already in use.');
+        }
+    }
+
+    private function assertNotLastActiveAdmin(int $userId): void
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT COUNT(*)
+            FROM portal_users u
+            JOIN user_roles ur ON ur.user_id = u.id
+            JOIN roles r ON r.id = ur.role_id
+            WHERE r.name = 'ADMIN'
+              AND u.is_active = 1
+              AND u.id <> :id
+        ");
+        $stmt->execute([':id' => $userId]);
+        $remaining = (int)$stmt->fetchColumn();
+        if ($remaining < 1) {
+            throw new UserFacingException('At least one active ADMIN account must remain at all times.');
         }
     }
 

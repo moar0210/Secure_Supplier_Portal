@@ -10,6 +10,8 @@ class Auth
 
     private PDO $pdo;
     private ?string $lastLoginError = null;
+    private bool $mustChangePasswordColumnKnown = false;
+    private bool $mustChangePasswordColumnExists = false;
 
     public function __construct(PDO $pdo)
     {
@@ -66,7 +68,7 @@ class Auth
         $this->lastLoginError = null;
 
         $identifier = trim($identifier);
-        $user = $this->findUserByIdentifier($identifier, false, "
+        $selectCols = "
             id,
             username,
             email,
@@ -75,7 +77,11 @@ class Auth
             is_active,
             failed_login_count,
             locked_until
-        ");
+        ";
+        if ($this->hasMustChangePasswordColumn()) {
+            $selectCols .= ",\n            must_change_password";
+        }
+        $user = $this->findUserByIdentifier($identifier, false, $selectCols);
 
         if (!$user) {
             $this->lastLoginError = 'INVALID';
@@ -91,7 +97,9 @@ class Auth
             $this->logAuthEvent('Login blocked by lockout', [
                 'user_id' => (int)$user['id'],
             ]);
-            $this->lastLoginError = 'LOCKED';
+            // Collapse locked/invalid into a single generic error so the
+            // login form does not reveal which accounts exist.
+            $this->lastLoginError = 'INVALID';
             return false;
         }
 
@@ -102,7 +110,7 @@ class Auth
                     'user_id' => (int)$user['id'],
                 ]);
             }
-            $this->lastLoginError = $lockedNow ? 'LOCKED' : 'INVALID';
+            $this->lastLoginError = 'INVALID';
             return false;
         }
 
@@ -130,6 +138,9 @@ class Auth
             'supplier_id' => $user['supplier_id'] === null ? null : (int)$user['supplier_id'],
             'roles' => array_map('strtoupper', $roles),
             'logged_in_at' => time(),
+            'must_change_password' => $this->hasMustChangePasswordColumn()
+                ? ((int)($user['must_change_password'] ?? 0) === 1)
+                : false,
         ];
 
         $this->logAuthEvent('Login succeeded', [
@@ -142,9 +153,84 @@ class Auth
 
     public function loginErrorMessage(): string
     {
-        return $this->lastLoginError === 'LOCKED'
-            ? 'Account temporarily locked due to repeated failed login attempts. Please try again later or reset your password.'
-            : 'Invalid credentials.';
+        // Intentionally generic — do not distinguish unknown user, disabled
+        // account, or lockout, to avoid account enumeration signals.
+        return 'Invalid credentials.';
+    }
+
+    public function mustChangePassword(): bool
+    {
+        return $this->isLoggedIn() && !empty($_SESSION['auth']['must_change_password']);
+    }
+
+    public function changePasswordForCurrentUser(string $currentPassword, string $newPassword, string $confirmPassword): void
+    {
+        if (!$this->isLoggedIn()) {
+            throw new UserFacingException('You must be signed in to change your password.');
+        }
+
+        $userId = (int)$this->userId();
+        $stmt = $this->pdo->prepare('SELECT password_hash FROM portal_users WHERE id = :id LIMIT 1');
+        $stmt->execute([':id' => $userId]);
+        $hash = (string)($stmt->fetchColumn() ?: '');
+        if ($hash === '' || !password_verify($currentPassword, $hash)) {
+            throw new UserFacingException('Current password is incorrect.');
+        }
+
+        if (password_verify($newPassword, $hash)) {
+            throw new UserFacingException('The new password must differ from the current password.');
+        }
+
+        $this->validateNewPassword($newPassword, $confirmPassword);
+
+        $newHash = $this->hashPassword($newPassword);
+
+        if ($this->hasMustChangePasswordColumn()) {
+            $upd = $this->pdo->prepare("
+                UPDATE portal_users
+                SET password_hash = :password_hash,
+                    must_change_password = 0,
+                    failed_login_count = 0,
+                    locked_until = NULL,
+                    updated_at = NOW()
+                WHERE id = :id
+            ");
+        } else {
+            $upd = $this->pdo->prepare("
+                UPDATE portal_users
+                SET password_hash = :password_hash,
+                    failed_login_count = 0,
+                    locked_until = NULL,
+                    updated_at = NOW()
+                WHERE id = :id
+            ");
+        }
+        $upd->execute([
+            ':password_hash' => $newHash,
+            ':id' => $userId,
+        ]);
+
+        $_SESSION['auth']['must_change_password'] = false;
+        $this->logAuthEvent('Password changed by user', [
+            'user_id' => $userId,
+        ]);
+    }
+
+    private function hasMustChangePasswordColumn(): bool
+    {
+        if ($this->mustChangePasswordColumnKnown) {
+            return $this->mustChangePasswordColumnExists;
+        }
+
+        try {
+            $stmt = $this->pdo->query("SHOW COLUMNS FROM portal_users LIKE 'must_change_password'");
+            $this->mustChangePasswordColumnExists = $stmt !== false && $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+        } catch (Throwable $e) {
+            $this->mustChangePasswordColumnExists = false;
+        }
+
+        $this->mustChangePasswordColumnKnown = true;
+        return $this->mustChangePasswordColumnExists;
     }
 
     public function requestPasswordReset(string $identifier): ?array

@@ -25,7 +25,6 @@ $navLink = static function (string $page, string $label) use ($currentPage): str
 
             <nav class="site-nav">
                 <?= $navLink('home', 'Home') ?>
-                <?= $navLink('marketplace', 'Marketplace') ?>
 
                 <?php if ($auth instanceof Auth && $auth->hasRole('ADMIN')): ?>
                     <?= $navLink('suppliers', 'Suppliers') ?>

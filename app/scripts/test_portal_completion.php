@@ -124,7 +124,7 @@ try {
 
     $publicAds = $statsService->listPublicAds();
     $publicAdIds = array_map(static fn(array $row): int => (int)$row['id'], $publicAds);
-    assertTrueValue(in_array((int)$fixture['ad_id'], $publicAdIds, true), 'approved active ad appears in the public marketplace', $checks);
+    assertTrueValue(in_array((int)$fixture['ad_id'], $publicAdIds, true), 'approved active ad appears in the shop API public listing', $checks);
 
     $statsService->recordImpressions([(int)$fixture['ad_id']]);
     $statsService->recordImpressions([(int)$fixture['ad_id']]);

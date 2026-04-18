@@ -38,7 +38,7 @@ final class ApiController extends BaseController
         $rows = $this->statsService->listPublicAds($filters);
         $trackParam = strtolower((string)($_GET['track'] ?? '1'));
         $shouldTrack = !in_array($trackParam, ['0', 'false', 'no'], true);
-        if ($shouldTrack) {
+        if ($shouldTrack && $this->trackingAllowed('list')) {
             $this->statsService->recordImpressions(array_column($rows, 'id'));
         }
 
@@ -77,12 +77,12 @@ final class ApiController extends BaseController
 
         $trackParam = strtolower((string)($_GET['track'] ?? '1'));
         $shouldTrack = !in_array($trackParam, ['0', 'false', 'no'], true);
-        if ($shouldTrack) {
+        if ($shouldTrack && $this->trackingAllowed('ad:' . $adId)) {
             $this->statsService->recordClick($adId);
         }
 
         $this->respond([
-            'ad' => $this->shapeAd($ad, true),
+            'ad' => $this->shapeAd($ad),
         ]);
     }
 
@@ -136,12 +136,12 @@ final class ApiController extends BaseController
         header_remove('Content-Type');
         header('Content-Type: ' . (string)$logo['mime_type']);
         header('Content-Length: ' . (string)(filesize((string)$logo['path']) ?: 0));
-        header('Cache-Control: public, max-age=300');
+        header('Cache-Control: public, max-age=60');
         header('Content-Disposition: inline; filename="' . (string)$logo['download_name'] . '"');
         readfile((string)$logo['path']);
     }
 
-    private function shapeAd(array $row, bool $includeDetail = false): array
+    private function shapeAd(array $row): array
     {
         $priceModel = (string)($row['price_model_type'] ?? '');
         $supplierId = (int)($row['supplier_id'] ?? 0);
@@ -170,10 +170,6 @@ final class ApiController extends BaseController
             ],
             'updated_at' => (string)($row['updated_at'] ?? ''),
         ];
-
-        if ($includeDetail) {
-            $base['detail_url'] = '?page=marketplace_ad&id=' . (int)$row['id'];
-        }
 
         return $base;
     }
@@ -219,7 +215,13 @@ final class ApiController extends BaseController
 
     private function resolveCorsOrigin(string $requestOrigin, array $allowed): ?string
     {
-        if ($allowed === [] || in_array('*', $allowed, true)) {
+        // Empty allowlist denies cross-origin requests. Only an explicit ["*"]
+        // entry opens the endpoint to any origin.
+        if ($allowed === []) {
+            return null;
+        }
+
+        if (in_array('*', $allowed, true)) {
             return '*';
         }
 
@@ -228,6 +230,59 @@ final class ApiController extends BaseController
         }
 
         return null;
+    }
+
+    private function trackingAllowed(string $scope): bool
+    {
+        $interval = (int)($this->config['api']['track_min_interval_seconds'] ?? 30);
+        if ($interval <= 0) {
+            return true;
+        }
+
+        $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+        $ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+        if ($ip === '') {
+            return true;
+        }
+
+        $key = hash('sha256', $ip . '|' . $ua . '|' . $scope);
+        $cacheDir = dirname(__DIR__) . '/storage/shop_track';
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0775, true);
+        }
+
+        $cutoff = time() - $interval;
+        $this->pruneTrackingCache($cacheDir, $cutoff);
+
+        $path = $cacheDir . '/' . $key;
+        if (is_file($path) && (int)@filemtime($path) >= $cutoff) {
+            return false;
+        }
+
+        @touch($path);
+        return true;
+    }
+
+    private function pruneTrackingCache(string $dir, int $cutoff): void
+    {
+        if (mt_rand(0, 49) !== 0) {
+            return;
+        }
+
+        $entries = @scandir($dir);
+        if ($entries === false) {
+            return;
+        }
+
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            if (is_file($path) && (int)@filemtime($path) < $cutoff) {
+                @unlink($path);
+            }
+        }
     }
 
     private function handlePreflight(): bool

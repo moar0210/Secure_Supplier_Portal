@@ -100,6 +100,35 @@ final class AuthController extends BaseController
         ], 200, 'Reset Password');
     }
 
+    public function changePassword(): void
+    {
+        $this->auth->requireLogin();
+
+        $error = null;
+        $success = false;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Csrf::verifyOrFail();
+
+            try {
+                $this->auth->changePasswordForCurrentUser(
+                    (string)($_POST['current_password'] ?? ''),
+                    (string)($_POST['new_password'] ?? ''),
+                    (string)($_POST['confirm_password'] ?? '')
+                );
+                $success = true;
+            } catch (Throwable $e) {
+                $error = $this->presentError($e, 'Unable to change the password right now.');
+            }
+        }
+
+        $this->render('view_change_password', [
+            'error' => $error,
+            'success' => $success,
+            'forced' => $this->auth->mustChangePassword(),
+        ], 200, 'Change Password');
+    }
+
     public function resetPassword(): void
     {
         $username = trim((string)($_GET['username'] ?? ''));

@@ -20,43 +20,6 @@ final class StatsController extends BaseController
         $this->statsService = $statsService;
     }
 
-    public function marketplace(): void
-    {
-        $filters = [
-            'search' => (string)($_GET['search'] ?? ''),
-            'category_id' => (string)($_GET['category_id'] ?? ''),
-        ];
-
-        $rows = $this->statsService->listPublicAds($filters);
-        $this->statsService->recordImpressions(array_column($rows, 'id'));
-
-        $this->render('view_marketplace', [
-            'filters' => $filters,
-            'rows' => $rows,
-            'categories' => $this->statsService->listCategories(),
-        ], 200, 'Marketplace');
-    }
-
-    public function marketplaceAd(): void
-    {
-        $idRaw = $_GET['id'] ?? null;
-        if (!$idRaw || !ctype_digit((string)$idRaw)) {
-            $this->redirect('?page=404');
-        }
-
-        $adId = (int)$idRaw;
-        $ad = $this->statsService->getPublicAd($adId);
-        if ($ad === null) {
-            $this->redirect('?page=404');
-        }
-
-        $this->statsService->recordClick($adId);
-
-        $this->render('view_marketplace_ad', [
-            'ad' => $ad,
-        ], 200, 'Advertisement');
-    }
-
     public function supplierStats(): void
     {
         $this->auth->requireRole('SUPPLIER');

@@ -9,7 +9,10 @@ return [
         "port" => 3306
     ],
     "crypto" => [
-        "enabled" => false,
+        // Encryption is ON by default. The app will refuse to boot unless an
+        // active key is configured; see README for the one-liner that
+        // generates a SUPPLIER_PORTAL_KEY_V1 value.
+        "enabled" => true,
         "active_key_id" => "v1",
         "keys" => [
             "v1" => getenv("SUPPLIER_PORTAL_KEY_V1") ?: "",
@@ -23,7 +26,13 @@ return [
     ],
     "api" => [
         // Origins allowed to call the public shop endpoints (?page=api_shop_*).
-        // Use ["*"] to allow any origin, or a concrete list to restrict.
-        "cors_allowed_origins" => ["*"],
+        // Provide a concrete list of origins, e.g.
+        //     ["https://hedvc.com", "https://www.hedvc.com"]
+        // Use ["*"] to explicitly allow any origin. An empty list denies all
+        // cross-origin requests.
+        "cors_allowed_origins" => [],
+        // Minimum seconds between tracked impressions/clicks from a single
+        // caller (identified by IP + User-Agent). Prevents stat inflation.
+        "track_min_interval_seconds" => 30,
     ],
 ];
