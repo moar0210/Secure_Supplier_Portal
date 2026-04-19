@@ -35,4 +35,10 @@ return [
         // caller (identified by IP + User-Agent). Prevents stat inflation.
         "track_min_interval_seconds" => 30,
     ],
+    "auth" => [
+        // Security-first default: do not reveal password reset links in the
+        // browser to anonymous requesters. If you need the legacy local-only
+        // behavior for an offline demo, explicitly opt in here.
+        "password_reset_reveal_link" => false,
+    ],
 ];

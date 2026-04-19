@@ -6,15 +6,38 @@
 
 SET FOREIGN_KEY_CHECKS = 0;
 
-ALTER TABLE `verification_token` ENGINE=InnoDB;
+-- Some legacy environments created verification_token as Aria with Aria-only
+-- table options, which makes a straight ALTER ... ENGINE=InnoDB fail. Rebuild
+-- the table explicitly instead of relying on engine conversion in place.
+DROP TABLE IF EXISTS `verification_token_innodb`;
 
--- The legacy schema keyed verification_token by username (varchar) rather than
--- user_id. Leave that as-is for data continuity, but tighten the column types
--- so it behaves identically under InnoDB.
-ALTER TABLE `verification_token`
-    MODIFY `username` VARCHAR(50) NOT NULL,
-    MODIFY `expiry_date` DATETIME NULL,
-    MODIFY `token` VARCHAR(255) NULL;
+CREATE TABLE `verification_token_innodb` (
+    `id_verification_token` INT(11) NOT NULL AUTO_INCREMENT,
+    `username` VARCHAR(50) NOT NULL,
+    `expiry_date` DATETIME NULL,
+    `token` VARCHAR(255) NULL,
+    PRIMARY KEY (`id_verification_token`),
+    UNIQUE KEY `uk_verification_token_username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `verification_token_innodb` (
+    `id_verification_token`,
+    `username`,
+    `expiry_date`,
+    `token`
+)
+SELECT
+    `id_verification_token`,
+    `username`,
+    `expiry_date`,
+    `token`
+FROM `verification_token`
+ON DUPLICATE KEY UPDATE
+    `expiry_date` = VALUES(`expiry_date`),
+    `token` = VALUES(`token`);
+
+DROP TABLE `verification_token`;
+RENAME TABLE `verification_token_innodb` TO `verification_token`;
 
 ALTER TABLE `portal_users`
     ADD COLUMN IF NOT EXISTS `must_change_password` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_active`;

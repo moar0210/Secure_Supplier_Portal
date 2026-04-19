@@ -231,7 +231,7 @@ Idempotent for drafts: re-running for the same month updates existing drafts ins
 
 ### Verification scripts
 
-Three end-to-end scripts under `app/scripts`. Each one creates the rows it needs, runs assertions, prints PASS/FAIL per check, and cleans up after itself. Safe to run against the same DB the app uses.
+Four end-to-end scripts under `app/scripts`. Each one creates the rows it needs, runs assertions, prints PASS/FAIL per check, and cleans up after itself. Safe to run against the same DB the app uses.
 
 Encryption round-trip + read/write paths:
 ```powershell
@@ -250,6 +250,12 @@ Portal completion (supplier lifecycle, users, shop-API visibility, stats, invoic
 C:\xampp\php\php.exe app\scripts\test_portal_completion.php
 ```
 Covers creating a supplier through the service, approval toggling, supplier-scoped company user CRUD, admin-side portal user CRUD, shop-API visibility for approved active ads, impression/click aggregation, the admin report payload, portal activity log persistence, and draft invoice deletion.
+
+Authentication flows (forced rotation, password reset, admin vs self-service password changes):
+```powershell
+C:\xampp\php\php.exe app\scripts\test_auth_flows.php
+```
+Requires migration 010 (`portal_users.must_change_password` column). Covers: new users must rotate their initial password, token-based reset clears the forced-rotation flag, admin-issued password changes re-flag the target user, self-service changes do not trigger another forced rotation.
 
 ### Benchmark
 
@@ -284,7 +290,11 @@ Wall-clock latency and memory for repeated encrypt/decrypt, profile reads, and p
 - Activity-log writes go to both `error_log` and the `portal_activity_logs` table when the table is reachable. If the table is missing (e.g. before migration 008), the logger silently falls back to `error_log` only.
 - All mutating forms include a CSRF token via `Csrf::input()` and verify it through `Csrf::verifyOrFail()`.
 - Sessions are cookie-based with `HttpOnly` + `SameSite=Strict` set in `SecurityBootstrap.php`. The `secure` flag is set automatically when the portal runs over HTTPS.
-- Password reset has no mail transport: the reset link is shown on-screen on the reset-request result page. A real deployment should wire up SMTP. The token flow itself is production-shaped: sha256-hashed token, 60-minute expiry, single-use.
+- Password reset has no mail transport. By default (`auth.password_reset_reveal_link = false`) the reset link is **not** shown in the browser — the form only confirms that a request was created. To retrieve the one-time link, run the CLI helper from the server:
+  ```
+  C:\xampp\php\php.exe app\scripts\create_password_reset_link.php <username-or-email>
+  ```
+  For a local offline demo you can opt in to showing the link in the browser by setting `auth.password_reset_reveal_link = true` in `config.local.php`; the link will then only be revealed when the request originates from `127.0.0.1` / `::1`. A real deployment should wire up SMTP instead. The token flow itself is production-shaped: sha256-hashed token, 60-minute expiry, single-use.
 - Seeded demo accounts ship with `must_change_password = 1`. The portal redirects them to `?page=change_password` on first login and blocks every other route until a new password is chosen. Do the same for any account you create via SQL.
 - Shop API CORS defaults to an empty allowlist (deny cross-origin). Set `api.cors_allowed_origins` to a concrete list or `["*"]` to reopen.
 - Shop API impression/click tracking is rate-limited per IP + User-Agent via `api.track_min_interval_seconds` (default 30s) to prevent stat inflation.

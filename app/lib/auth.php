@@ -287,7 +287,7 @@ class Auth
         $this->validateNewPassword($newPassword, $confirmPassword);
 
         $passwordHash = $this->hashPassword($newPassword);
-        $this->updatePasswordHashForUsername($username, $passwordHash);
+        $this->updatePasswordHashForUsername($username, $passwordHash, false);
 
         $stmt = $this->pdo->prepare('DELETE FROM verification_token WHERE username = :username');
         $stmt->execute([':username' => $username]);
@@ -380,21 +380,39 @@ class Auth
         ]);
     }
 
-    private function updatePasswordHashForUsername(string $username, string $passwordHash): void
+    private function updatePasswordHashForUsername(string $username, string $passwordHash, bool $mustChangePassword): void
     {
-        $stmt = $this->pdo->prepare("
-            UPDATE portal_users
-            SET password_hash = :password_hash,
-                failed_login_count = 0,
-                locked_until = NULL,
-                updated_at = NOW()
-            WHERE username = :username
-              AND is_active = 1
-        ");
-        $stmt->execute([
-            ':password_hash' => $passwordHash,
-            ':username' => $username,
-        ]);
+        if ($this->hasMustChangePasswordColumn()) {
+            $stmt = $this->pdo->prepare("
+                UPDATE portal_users
+                SET password_hash = :password_hash,
+                    must_change_password = :must_change_password,
+                    failed_login_count = 0,
+                    locked_until = NULL,
+                    updated_at = NOW()
+                WHERE username = :username
+                  AND is_active = 1
+            ");
+            $stmt->execute([
+                ':password_hash' => $passwordHash,
+                ':must_change_password' => $mustChangePassword ? 1 : 0,
+                ':username' => $username,
+            ]);
+        } else {
+            $stmt = $this->pdo->prepare("
+                UPDATE portal_users
+                SET password_hash = :password_hash,
+                    failed_login_count = 0,
+                    locked_until = NULL,
+                    updated_at = NOW()
+                WHERE username = :username
+                  AND is_active = 1
+            ");
+            $stmt->execute([
+                ':password_hash' => $passwordHash,
+                ':username' => $username,
+            ]);
+        }
 
         if ($stmt->rowCount() !== 1) {
             throw new RuntimeException('Unable to update the password for this account.');

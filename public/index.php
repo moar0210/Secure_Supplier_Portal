@@ -148,5 +148,19 @@ try {
         http_response_code(500);
     }
 
+    if (str_starts_with($page, 'api_')) {
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+
+        echo json_encode([
+            'error' => [
+                'status' => 500,
+                'message' => 'Something went wrong. Please try again later.',
+            ],
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     echo 'Something went wrong. Please try again later.';
 }

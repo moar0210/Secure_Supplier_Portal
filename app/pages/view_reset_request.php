@@ -20,6 +20,11 @@
                 <p class="mt-3 mb-0" style="word-break:break-all;">
                     <a href="<?= h($resetLink) ?>"><?= h($resetLink) ?></a>
                 </p>
+            <?php elseif (!empty($resetLinkHidden)): ?>
+                <p class="mt-3 mb-0">
+                    For security, the reset link is not shown in the browser. If email delivery is not configured, generate the one-time link from the local server using
+                    <code>C:\xampp\php\php.exe app\scripts\create_password_reset_link.php &lt;username-or-email&gt;</code>.
+                </p>
             <?php else: ?>
                 <p class="mt-3 mb-0 muted small">If the account does not exist, no reset link is generated.</p>
             <?php endif; ?>

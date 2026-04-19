@@ -5,6 +5,8 @@ declare(strict_types=1);
 final class PortalUserService
 {
     private PDO $pdo;
+    private bool $mustChangePasswordColumnKnown = false;
+    private bool $mustChangePasswordColumnExists = false;
 
     public function __construct(PDO $pdo)
     {
@@ -136,36 +138,51 @@ final class PortalUserService
     public function createUserAsAdmin(array $input): int
     {
         $clean = $this->normalizeInput($input, true, true, null);
+        $hasMustChangePassword = $this->hasMustChangePasswordColumn();
 
         $this->pdo->beginTransaction();
 
         try {
-            $stmt = $this->pdo->prepare("
-                INSERT INTO portal_users (
-                    username,
-                    email,
-                    password_hash,
-                    supplier_id,
-                    is_active,
-                    failed_login_count,
-                    locked_until
-                ) VALUES (
-                    :username,
-                    :email,
-                    :password_hash,
-                    :supplier_id,
-                    :is_active,
-                    0,
-                    NULL
-                )
-            ");
-            $stmt->execute([
+            $columns = [
+                'username',
+                'email',
+                'password_hash',
+                'supplier_id',
+                'is_active',
+            ];
+            $values = [
+                ':username',
+                ':email',
+                ':password_hash',
+                ':supplier_id',
+                ':is_active',
+            ];
+            $params = [
                 ':username' => $clean['username'],
                 ':email' => $clean['email'],
                 ':password_hash' => $clean['password_hash'],
                 ':supplier_id' => $clean['supplier_id'],
                 ':is_active' => $clean['is_active'],
-            ]);
+            ];
+
+            if ($hasMustChangePassword) {
+                $columns[] = 'must_change_password';
+                $values[] = ':must_change_password';
+                $params[':must_change_password'] = 1;
+            }
+
+            $stmt = $this->pdo->prepare("
+                INSERT INTO portal_users (
+                    " . implode(",\n                    ", $columns) . ",
+                    failed_login_count,
+                    locked_until
+                ) VALUES (
+                    " . implode(",\n                    ", $values) . ",
+                    0,
+                    NULL
+                )
+            ");
+            $stmt->execute($params);
 
             $userId = (int)$this->pdo->lastInsertId();
             $this->replaceRoles($userId, [$clean['role_name']]);
@@ -190,6 +207,7 @@ final class PortalUserService
         }
 
         $clean = $this->normalizeInput($input, true, false, null, $userId);
+        $hasMustChangePassword = $this->hasMustChangePasswordColumn();
 
         if ($actorUserId !== null && $actorUserId === $userId) {
             $existingRoles = (array)($existing['roles'] ?? []);
@@ -230,12 +248,20 @@ final class PortalUserService
             ];
 
             if ($clean['password_hash'] !== null) {
+                $mustChangePassword = $actorUserId === null || $actorUserId !== $userId;
                 $sql .= ',
                     password_hash = :password_hash,
                     failed_login_count = 0,
                     locked_until = NULL
                 ';
                 $params[':password_hash'] = $clean['password_hash'];
+
+                if ($hasMustChangePassword) {
+                    $sql .= ',
+                    must_change_password = :must_change_password
+                ';
+                    $params[':must_change_password'] = $mustChangePassword ? 1 : 0;
+                }
             }
 
             $sql .= ' WHERE id = :id';
@@ -258,36 +284,51 @@ final class PortalUserService
     public function createUserForSupplier(int $supplierId, array $input): int
     {
         $clean = $this->normalizeInput($input, false, true, $supplierId);
+        $hasMustChangePassword = $this->hasMustChangePasswordColumn();
 
         $this->pdo->beginTransaction();
 
         try {
-            $stmt = $this->pdo->prepare("
-                INSERT INTO portal_users (
-                    username,
-                    email,
-                    password_hash,
-                    supplier_id,
-                    is_active,
-                    failed_login_count,
-                    locked_until
-                ) VALUES (
-                    :username,
-                    :email,
-                    :password_hash,
-                    :supplier_id,
-                    :is_active,
-                    0,
-                    NULL
-                )
-            ");
-            $stmt->execute([
+            $columns = [
+                'username',
+                'email',
+                'password_hash',
+                'supplier_id',
+                'is_active',
+            ];
+            $values = [
+                ':username',
+                ':email',
+                ':password_hash',
+                ':supplier_id',
+                ':is_active',
+            ];
+            $params = [
                 ':username' => $clean['username'],
                 ':email' => $clean['email'],
                 ':password_hash' => $clean['password_hash'],
                 ':supplier_id' => $clean['supplier_id'],
                 ':is_active' => $clean['is_active'],
-            ]);
+            ];
+
+            if ($hasMustChangePassword) {
+                $columns[] = 'must_change_password';
+                $values[] = ':must_change_password';
+                $params[':must_change_password'] = 1;
+            }
+
+            $stmt = $this->pdo->prepare("
+                INSERT INTO portal_users (
+                    " . implode(",\n                    ", $columns) . ",
+                    failed_login_count,
+                    locked_until
+                ) VALUES (
+                    " . implode(",\n                    ", $values) . ",
+                    0,
+                    NULL
+                )
+            ");
+            $stmt->execute($params);
 
             $userId = (int)$this->pdo->lastInsertId();
             $this->replaceRoles($userId, ['SUPPLIER']);
@@ -304,7 +345,7 @@ final class PortalUserService
         }
     }
 
-    public function updateUserForSupplier(int $userId, int $supplierId, array $input): void
+    public function updateUserForSupplier(int $userId, int $supplierId, array $input, ?int $actorUserId = null): void
     {
         $existing = $this->getUser($userId);
         if ($existing === null || (int)($existing['supplier_id'] ?? 0) !== $supplierId) {
@@ -312,6 +353,7 @@ final class PortalUserService
         }
 
         $clean = $this->normalizeInput($input, false, false, $supplierId, $userId);
+        $hasMustChangePassword = $this->hasMustChangePasswordColumn();
 
         $this->pdo->beginTransaction();
 
@@ -334,12 +376,20 @@ final class PortalUserService
             ];
 
             if ($clean['password_hash'] !== null) {
+                $mustChangePassword = $actorUserId === null || $actorUserId !== $userId;
                 $sql .= ',
                     password_hash = :password_hash,
                     failed_login_count = 0,
                     locked_until = NULL
                 ';
                 $params[':password_hash'] = $clean['password_hash'];
+
+                if ($hasMustChangePassword) {
+                    $sql .= ',
+                    must_change_password = :must_change_password
+                ';
+                    $params[':must_change_password'] = $mustChangePassword ? 1 : 0;
+                }
             }
 
             $sql .= ' WHERE id = :id';
@@ -543,5 +593,23 @@ final class PortalUserService
         $row['role_names'] = $roleNames;
 
         return $row;
+    }
+
+    private function hasMustChangePasswordColumn(): bool
+    {
+        if ($this->mustChangePasswordColumnKnown) {
+            return $this->mustChangePasswordColumnExists;
+        }
+
+        try {
+            $stmt = $this->pdo->query("SHOW COLUMNS FROM portal_users LIKE 'must_change_password'");
+            $this->mustChangePasswordColumnExists = $stmt !== false && $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+        } catch (Throwable $e) {
+            $this->mustChangePasswordColumnExists = false;
+        }
+
+        $this->mustChangePasswordColumnKnown = true;
+
+        return $this->mustChangePasswordColumnExists;
     }
 }

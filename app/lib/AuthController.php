@@ -65,6 +65,7 @@ final class AuthController extends BaseController
         $submitted = false;
         $resetLink = null;
         $resetExpiresAt = null;
+        $resetLinkHidden = false;
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Csrf::verifyOrFail();
@@ -79,11 +80,16 @@ final class AuthController extends BaseController
                         'username' => (string)$tokenData['username'],
                         'expires_at' => (string)$tokenData['expires_at'],
                     ]);
-                    $resetLink = '?page=reset_password&username='
-                        . rawurlencode((string)$tokenData['username'])
-                        . '&token='
-                        . rawurlencode((string)$tokenData['token']);
-                    $resetExpiresAt = (string)$tokenData['expires_at'];
+
+                    if ($this->shouldRevealResetLink()) {
+                        $resetLink = '?page=reset_password&username='
+                            . rawurlencode((string)$tokenData['username'])
+                            . '&token='
+                            . rawurlencode((string)$tokenData['token']);
+                        $resetExpiresAt = (string)$tokenData['expires_at'];
+                    } else {
+                        $resetLinkHidden = true;
+                    }
                 }
             } catch (Throwable $e) {
                 $this->logUnexpected($e, 'Password reset request failed');
@@ -97,6 +103,7 @@ final class AuthController extends BaseController
             'submitted' => $submitted,
             'resetLink' => $resetLink,
             'resetExpiresAt' => $resetExpiresAt,
+            'resetLinkHidden' => $resetLinkHidden,
         ], 200, 'Reset Password');
     }
 
@@ -167,5 +174,16 @@ final class AuthController extends BaseController
             'success' => $success,
             'isValidToken' => $isValidToken,
         ], 200, 'Choose New Password');
+    }
+
+    private function shouldRevealResetLink(): bool
+    {
+        if (empty($this->config['auth']['password_reset_reveal_link'])) {
+            return false;
+        }
+
+        $remoteAddr = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+
+        return in_array($remoteAddr, ['127.0.0.1', '::1'], true);
     }
 }

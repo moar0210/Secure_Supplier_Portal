@@ -82,6 +82,9 @@ try {
     ]);
     $supplierUsers = $portalUserService->listUsersForSupplier((int)$fixture['supplier_id']);
     assertTrueValue(count($supplierUsers) >= 1, 'supplier company user is listed', $checks);
+    if (mustChangePasswordColumnExists($pdo)) {
+        assertSameValue(1, fetchMustChangePasswordFlag($pdo, (int)$fixture['company_user_id']), 'new supplier-linked users must rotate their initial password', $checks);
+    }
 
     $portalUserService->updateUserForSupplier((int)$fixture['company_user_id'], (int)$fixture['supplier_id'], [
         'username' => 'company_updated_' . bin2hex(random_bytes(3)),
@@ -110,9 +113,12 @@ try {
         'role_name' => 'ADMIN',
         'supplier_id' => '',
         'is_active' => '1',
-    ]);
+    ], (int)$fixture['actor_user_id']);
     $updatedAdminManagedUser = $portalUserService->getUser((int)$fixture['admin_created_user_id']);
     assertTrueValue(in_array('ADMIN', (array)($updatedAdminManagedUser['roles'] ?? []), true), 'admin user management can change roles', $checks);
+    if (mustChangePasswordColumnExists($pdo)) {
+        assertSameValue(1, fetchMustChangePasswordFlag($pdo, (int)$fixture['admin_created_user_id']), 'admin-issued password resets require a forced password change', $checks);
+    }
 
     PortalLogger::write($pdo, 'ACTIVITY', 'Completion test log event', [
         'actor_user_id' => $fixture['actor_user_id'],
@@ -146,13 +152,11 @@ try {
     assertTrueValue((int)($adminReport['visibility']['impressions'] ?? 0) >= 2, 'admin report aggregates visibility totals', $checks);
     assertTrueValue(count((array)($adminReport['recent_activity'] ?? [])) >= 1, 'admin report includes recent activity log rows', $checks);
 
-    $billingMonth = date('Y-m');
-    $invoiceService->generateMonthlyInvoices($billingMonth, (int)$fixture['actor_user_id']);
-    $draftInvoiceId = findDraftInvoiceIdForSupplier($invoiceService, (int)$fixture['supplier_id'], $billingMonth);
-    assertTrueValue($draftInvoiceId > 0, 'monthly invoice generation creates a supplier draft invoice', $checks);
+    $draftInvoiceId = createIsolatedDraftInvoice($pdo, $crypto, $supplierService, (int)$fixture['supplier_id'], (int)$fixture['actor_user_id']);
+    assertTrueValue($draftInvoiceId > 0, 'an isolated draft invoice fixture can be created for deletion checks', $checks);
 
     $invoiceService->deleteDraftInvoice($draftInvoiceId);
-    assertSameValue(0, findDraftInvoiceIdForSupplier($invoiceService, (int)$fixture['supplier_id'], $billingMonth), 'draft invoice deletion removes the invoice', $checks);
+    assertSameValue(0, findInvoiceExists($pdo, $draftInvoiceId), 'draft invoice deletion removes the invoice', $checks);
 
     echo "Portal completion verification completed.\n";
     foreach ($checks as $check) {
@@ -327,14 +331,151 @@ function createApprovedActiveAd(PDO $pdo, int $supplierId, int $actorUserId): in
     return $adId;
 }
 
-function findDraftInvoiceIdForSupplier(InvoiceService $invoiceService, int $supplierId, string $billingMonth): int
+function createIsolatedDraftInvoice(PDO $pdo, Crypto $crypto, SupplierService $supplierService, int $supplierId, int $actorUserId): int
 {
-    $rows = $invoiceService->listInvoicesForSupplier($supplierId, [
-        'status' => InvoiceService::STATUS_DRAFT,
-        'billing_month' => $billingMonth,
+    $profile = $supplierService->getProfile($supplierId);
+    if ($profile === null) {
+        throw new RuntimeException('Unable to load the supplier profile for the draft invoice fixture.');
+    }
+
+    $billingYear = 2099;
+    $billingMonth = 12;
+    $invoiceNumber = 'TST-' . strtoupper(bin2hex(random_bytes(6)));
+    $issueDate = '2099-12-01';
+    $dueDate = '2099-12-31';
+
+    $snapshots = [
+        'supplier_name_snapshot' => encryptSnapshotValue($crypto, (string)$profile['company_name'], 'invoices.supplier_name_snapshot'),
+        'supplier_short_name_snapshot' => encryptSnapshotValue($crypto, (string)$profile['short_name'], 'invoices.supplier_short_name_snapshot'),
+        'contact_person_snapshot' => encryptSnapshotValue($crypto, (string)$profile['contact_person'], 'invoices.contact_person_snapshot'),
+        'supplier_email_snapshot' => encryptSnapshotValue($crypto, (string)$profile['email'], 'invoices.supplier_email_snapshot'),
+        'supplier_vat_number_snapshot' => encryptSnapshotValue($crypto, (string)$profile['vat_number'], 'invoices.supplier_vat_number_snapshot'),
+        'homepage_snapshot' => encryptSnapshotValue($crypto, (string)$profile['homepage'], 'invoices.homepage_snapshot'),
+        'address_line_1_snapshot' => encryptSnapshotValue($crypto, (string)$profile['address_line_1'], 'invoices.address_line_1_snapshot'),
+        'address_line_2_snapshot' => encryptSnapshotValue($crypto, (string)$profile['address_line_2'], 'invoices.address_line_2_snapshot'),
+        'city_snapshot' => encryptSnapshotValue($crypto, (string)$profile['city'], 'invoices.city_snapshot'),
+        'region_snapshot' => encryptSnapshotValue($crypto, (string)$profile['region'], 'invoices.region_snapshot'),
+        'postal_code_snapshot' => encryptSnapshotValue($crypto, (string)$profile['postal_code'], 'invoices.postal_code_snapshot'),
+    ];
+
+    $stmt = $pdo->prepare("
+        INSERT INTO invoices (
+            supplier_id,
+            pricing_rule_id,
+            billing_year,
+            billing_month,
+            billing_period_start,
+            billing_period_end,
+            sequence_no,
+            invoice_number,
+            status,
+            currency_code,
+            issue_date,
+            due_date,
+            vat_rate,
+            subtotal_amount,
+            vat_amount,
+            total_amount,
+            supplier_name_snapshot,
+            supplier_short_name_snapshot,
+            contact_person_snapshot,
+            supplier_email_snapshot,
+            supplier_vat_number_snapshot,
+            homepage_snapshot,
+            address_line_1_snapshot,
+            address_line_2_snapshot,
+            city_snapshot,
+            region_snapshot,
+            postal_code_snapshot,
+            country_code_snapshot,
+            generated_by_user_id
+        ) VALUES (
+            :supplier_id,
+            NULL,
+            :billing_year,
+            :billing_month,
+            :billing_period_start,
+            :billing_period_end,
+            :sequence_no,
+            :invoice_number,
+            :status,
+            'SEK',
+            :issue_date,
+            :due_date,
+            25.00,
+            0.00,
+            0.00,
+            0.00,
+            :supplier_name_snapshot,
+            :supplier_short_name_snapshot,
+            :contact_person_snapshot,
+            :supplier_email_snapshot,
+            :supplier_vat_number_snapshot,
+            :homepage_snapshot,
+            :address_line_1_snapshot,
+            :address_line_2_snapshot,
+            :city_snapshot,
+            :region_snapshot,
+            :postal_code_snapshot,
+            :country_code_snapshot,
+            :generated_by_user_id
+        )
+    ");
+    $stmt->execute([
+        ':supplier_id' => $supplierId,
+        ':billing_year' => $billingYear,
+        ':billing_month' => $billingMonth,
+        ':billing_period_start' => $issueDate,
+        ':billing_period_end' => $dueDate,
+        ':sequence_no' => random_int(9000, 9999),
+        ':invoice_number' => $invoiceNumber,
+        ':status' => InvoiceService::STATUS_DRAFT,
+        ':issue_date' => $issueDate,
+        ':due_date' => $dueDate,
+        ':supplier_name_snapshot' => $snapshots['supplier_name_snapshot'],
+        ':supplier_short_name_snapshot' => $snapshots['supplier_short_name_snapshot'],
+        ':contact_person_snapshot' => $snapshots['contact_person_snapshot'],
+        ':supplier_email_snapshot' => $snapshots['supplier_email_snapshot'],
+        ':supplier_vat_number_snapshot' => $snapshots['supplier_vat_number_snapshot'],
+        ':homepage_snapshot' => $snapshots['homepage_snapshot'],
+        ':address_line_1_snapshot' => $snapshots['address_line_1_snapshot'],
+        ':address_line_2_snapshot' => $snapshots['address_line_2_snapshot'],
+        ':city_snapshot' => $snapshots['city_snapshot'],
+        ':region_snapshot' => $snapshots['region_snapshot'],
+        ':postal_code_snapshot' => $snapshots['postal_code_snapshot'],
+        ':country_code_snapshot' => strtoupper((string)$profile['country_code']),
+        ':generated_by_user_id' => $actorUserId,
     ]);
 
-    return isset($rows[0]['id']) ? (int)$rows[0]['id'] : 0;
+    return (int)$pdo->lastInsertId();
+}
+
+function findInvoiceExists(PDO $pdo, int $invoiceId): int
+{
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM invoices WHERE id = :id');
+    $stmt->execute([':id' => $invoiceId]);
+
+    return (int)$stmt->fetchColumn();
+}
+
+function mustChangePasswordColumnExists(PDO $pdo): bool
+{
+    $stmt = $pdo->query("SHOW COLUMNS FROM portal_users LIKE 'must_change_password'");
+
+    return $stmt !== false && $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+}
+
+function fetchMustChangePasswordFlag(PDO $pdo, int $userId): int
+{
+    $stmt = $pdo->prepare('SELECT must_change_password FROM portal_users WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $userId]);
+
+    return (int)($stmt->fetchColumn() ?: 0);
+}
+
+function encryptSnapshotValue(Crypto $crypto, string $value, string $aad): string
+{
+    return (string)$crypto->encryptNullable($value, $aad);
 }
 
 function cleanupFixture(PDO $pdo, array $fixture): void
@@ -369,6 +510,9 @@ function cleanupFixture(PDO $pdo, array $fixture): void
 
     foreach (['company_user_id', 'admin_created_user_id', 'actor_user_id'] as $userKey) {
         if (!empty($fixture[$userKey])) {
+            $pdo->prepare('DELETE FROM portal_activity_logs WHERE user_id = :user_id')->execute([
+                ':user_id' => $fixture[$userKey],
+            ]);
             $pdo->prepare('DELETE FROM user_roles WHERE user_id = :user_id')->execute([
                 ':user_id' => $fixture[$userKey],
             ]);

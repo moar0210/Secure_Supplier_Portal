@@ -120,7 +120,7 @@ final class UserController extends BaseController
                     }
 
                     $userId = (int)$userIdRaw;
-                    $this->portalUserService->updateUserForSupplier($userId, $supplierId, $_POST);
+                    $this->portalUserService->updateUserForSupplier($userId, $supplierId, $_POST, $this->auth->userId());
                     $this->logActivity('Supplier company user updated', [
                         'supplier_id' => $supplierId,
                         'actor_user_id' => $this->auth->userId(),
