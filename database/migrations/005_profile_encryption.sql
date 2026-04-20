@@ -1,11 +1,5 @@
 START TRANSACTION;
 
-/*
-  Phase 4 practical thesis scope:
-  widen only the supplier-profile columns that need room for versioned ciphertext envelopes.
-  This is application-level encryption of sensitive supplier profile fields, not blanket DB encryption.
-*/
-
 ALTER TABLE `suppliers`
   MODIFY `email` varchar(255) NOT NULL DEFAULT '',
   MODIFY `unique_id` varchar(255) NOT NULL DEFAULT '';

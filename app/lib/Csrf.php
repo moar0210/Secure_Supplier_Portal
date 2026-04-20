@@ -46,8 +46,7 @@ final class Csrf
         }
 
         if ($previous !== '' && $previousExpires >= time() && hash_equals($previous, $sent)) {
-            // Accept prior token during its grace window (multi-tab, back button).
-            // Do not rotate again — the current token is already fresh.
+            // Grace window for another open tab.
             return;
         }
 

@@ -7,7 +7,6 @@ final class SupplierService
     private const EMPTY_UUID = 'EMPTY';
     private const MAX_LOGO_BYTES = 2097152;
     private const MAX_LOGO_FILENAME_LENGTH = 255;
-    /** @var array<string, string> */
     private const LOGO_MIME_TYPES = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
@@ -24,11 +23,26 @@ final class SupplierService
         $this->crypto = $crypto;
     }
 
-    public function listSuppliers(int $limit = 50): array
+    public function listSuppliers(int $limit = 50, int $offset = 0, string $search = ''): array
     {
         $limit = max(1, min($limit, 200));
+        $offset = max(0, $offset);
+        $search = trim($search);
 
-        $stmt = $this->pdo->prepare("
+        $where = [];
+        $params = [];
+        if ($search !== '') {
+            $where[] = '(
+                s.supplier_name LIKE :search
+                OR s.short_name LIKE :search
+                OR s.homepage LIKE :search
+                OR s.id_supplier = :search_id
+            )';
+            $params[':search'] = '%' . $search . '%';
+            $params[':search_id'] = ctype_digit($search) ? (int)$search : -1;
+        }
+
+        $sql = "
             SELECT
                 s.id_supplier,
                 s.uuid_supplier,
@@ -48,10 +62,24 @@ final class SupplierService
                     WHERE a.supplier_id = s.id_supplier
                 ) AS ad_count
             FROM suppliers s
-            ORDER BY id_supplier ASC
+        ";
+
+        if ($where !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+
+        $sql .= "
+            ORDER BY s.id_supplier ASC
             LIMIT :limit
-        ");
+            OFFSET :offset
+        ";
+
+        $stmt = $this->pdo->prepare($sql);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
 
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -64,6 +92,36 @@ final class SupplierService
         unset($row);
 
         return $rows;
+    }
+
+    public function countSuppliers(string $search = ''): int
+    {
+        $search = trim($search);
+        $where = [];
+        $params = [];
+        if ($search !== '') {
+            $where[] = '(
+                supplier_name LIKE :search
+                OR short_name LIKE :search
+                OR homepage LIKE :search
+                OR id_supplier = :search_id
+            )';
+            $params[':search'] = '%' . $search . '%';
+            $params[':search_id'] = ctype_digit($search) ? (int)$search : -1;
+        }
+
+        $sql = 'SELECT COUNT(*) FROM suppliers';
+        if ($where !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+
+        $stmt = $this->pdo->prepare($sql);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+        $stmt->execute();
+
+        return (int)$stmt->fetchColumn();
     }
 
     public function listSupplierOptions(bool $includeInactive = true): array

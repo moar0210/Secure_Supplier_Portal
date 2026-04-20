@@ -1,7 +1,3 @@
--- 001_portal_auth.sql
--- Portal auth + RBAC tables
--- Links supplier users to legacy suppliers.id_supplier
-
 SET FOREIGN_KEY_CHECKS = 0;
 
 CREATE TABLE IF NOT EXISTS roles (

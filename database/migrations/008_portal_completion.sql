@@ -1,12 +1,5 @@
 START TRANSACTION;
 
-/*
-  Completion migration:
-  - re-assert encrypted phone column sizes so profile encryption works with ciphertext
-  - add activity log persistence for admin reporting and audit trails
-  - add daily ad statistics aggregation for impressions/clicks dashboards
-*/
-
 ALTER TABLE `phones_entities`
   MODIFY `country_prefix` varchar(120) DEFAULT NULL,
   MODIFY `area_code` varchar(120) DEFAULT NULL,

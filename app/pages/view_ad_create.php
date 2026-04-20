@@ -10,7 +10,7 @@
     <div class="alert alert--error"><?= h($error) ?></div>
 <?php endif; ?>
 
-<form method="post" autocomplete="off" class="form-stack">
+<form method="post" autocomplete="off" class="form-stack ad-form">
     <?= Csrf::input(); ?>
 
     <div class="field">

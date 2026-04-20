@@ -12,7 +12,6 @@ final class Crypto
 
     private bool $enabled;
     private string $activeKeyId;
-    /** @var array<string, string> */
     private array $keys;
 
     public function __construct(array $config = [])
@@ -160,10 +159,6 @@ final class Crypto
         return is_string($value) && str_starts_with($value, self::ENVELOPE_PREFIX . ':');
     }
 
-    /**
-     * @param array<string, string> $rawKeys
-     * @return array<string, string>
-     */
     private function loadKeys(array $rawKeys): array
     {
         $keys = [];

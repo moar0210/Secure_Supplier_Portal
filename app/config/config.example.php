@@ -9,9 +9,7 @@ return [
         "port" => 3306
     ],
     "crypto" => [
-        // Encryption is ON by default. The app will refuse to boot unless an
-        // active key is configured; see README for the one-liner that
-        // generates a SUPPLIER_PORTAL_KEY_V1 value.
+        // See README for generating SUPPLIER_PORTAL_KEY_V1.
         "enabled" => true,
         "active_key_id" => "v1",
         "keys" => [
@@ -19,26 +17,17 @@ return [
         ],
     ],
     "portal" => [
-        // Absolute base URL of the portal, used when the shop API returns
-        // fully-qualified URLs (e.g. supplier logo links). Leave empty to
-        // return relative paths instead.
+        // Empty means the shop API returns relative logo URLs.
         "base_url" => "",
     ],
     "api" => [
-        // Origins allowed to call the public shop endpoints (?page=api_shop_*).
-        // Provide a concrete list of origins, e.g.
-        //     ["https://hedvc.com", "https://www.hedvc.com"]
-        // Use ["*"] to explicitly allow any origin. An empty list denies all
-        // cross-origin requests.
+        // Use ["*"] only for a public catalogue.
         "cors_allowed_origins" => [],
-        // Minimum seconds between tracked impressions/clicks from a single
-        // caller (identified by IP + User-Agent). Prevents stat inflation.
+        // Per IP + User-Agent.
         "track_min_interval_seconds" => 30,
     ],
     "auth" => [
-        // Security-first default: do not reveal password reset links in the
-        // browser to anonymous requesters. If you need the legacy local-only
-        // behavior for an offline demo, explicitly opt in here.
+        // Local demo only.
         "password_reset_reveal_link" => false,
     ],
 ];

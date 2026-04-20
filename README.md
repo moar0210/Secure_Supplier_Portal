@@ -6,7 +6,7 @@ No framework. Routing is a single `public/index.php` that dispatches on `?page=`
 
 ## Requirements
 
-- PHP 8.1+ with `sodium` and `pdo_mysql` enabled
+- PHP 8.1+ with `sodium`, `pdo_mysql`, and `curl` enabled
 - MariaDB 10.4+ (MySQL 8 also works)
 - Apache; `mod_rewrite` is not required
 
@@ -20,9 +20,9 @@ app/
   lib/           controllers, services, Crypto, Auth, PortalLogger, etc.
   pages/         view_*.php templates rendered via View.php
   scripts/       CLI: backfill, tests, benchmark, invoicing
-  storage/       logo uploads (outside the web root)
+  storage/       logo uploads and runtime caches (denied to direct HTTP)
 database/
-  migrations/    001..010, run in order
+  migrations/    000..010, run in order
   seeds/         optional demo users + role seed
 public/
   index.php      single entry point, routes by ?page=...
@@ -48,7 +48,7 @@ docs/            project specs (not source)
    ```
    Set the output as `SUPPLIER_PORTAL_KEY_V1` in the environment Apache/PHP runs under. Don't commit it. If you lose it, the encrypted profile data is gone for good.
 
-5. **Run migrations 001–010 in numeric order:**
+5. **Run migrations 000-010 in numeric order:**
    ```powershell
    Get-ChildItem database\migrations\*.sql | Sort-Object Name | ForEach-Object {
      C:\xampp\mysql\bin\mysql.exe -u USER -p DB < $_.FullName
@@ -60,9 +60,9 @@ docs/            project specs (not source)
    C:\xampp\mysql\bin\mysql.exe -u USER -p DB < database\seeds\001_portal_auth_seed.sql
    C:\xampp\mysql\bin\mysql.exe -u USER -p DB < database\seeds\002_portal_demo_users_seed.sql
    ```
-   You get `admintest` (ADMIN) and `suppliertest` (SUPPLIER, linked to supplier id 23; edit the seed if that id does not exist). Both passwords are `password` and flagged `must_change_password = 1`.
+   You get `admintest` (ADMIN) and `suppliertest` (SUPPLIER, linked to supplier id 23). The demo seed creates supplier id 23 if it is missing, so a fresh database works without any manual supplier row. Both passwords are `password` and flagged `must_change_password = 1`.
 
-7. **Point a vhost at `public/`** or drop the project under `htdocs` and visit `http://localhost/supplier-portal-thesis-2026/public/`.
+7. **Point a vhost at `public/`** or drop the project under `htdocs` and visit `http://localhost/supplier-portal-thesis-2026/public/`. The repository includes Apache `.htaccess` deny rules for `app/`, `database/`, and `tmp/`; keep `AllowOverride` enabled if using the broader `htdocs` layout.
 
 ## What's in the portal
 
@@ -269,13 +269,14 @@ Wall-clock latency and memory for repeated encrypt/decrypt, profile reads, and p
 
 | File | Summary |
 |---|---|
+| `000_legacy_core_schema.sql` | Minimal supplier, address, contact, phone, and address-link tables required for a clean install without an external legacy dump |
 | `001_portal_auth.sql` | Portal user, role, user_role tables; sessions and reset tokens |
 | `002_ads.sql` | Ads, categories, ad status history |
 | `003_portal_security.sql` | Lockout counters, failed-login tracking, security columns |
 | `004_supplier_phone_optional_codes.sql` | Makes phone country prefix/area code optional |
 | `005_profile_encryption.sql` | Widens encrypted columns, switches phone fields to string, drops the legacy phone uniqueness index (AEAD ciphertext is random) |
 | `006_invoicing.sql` | Pricing rules, invoices, lines, payments, status history, numbering sequences, ad activation history |
-| `007_supplier_logos.sql` | Logo metadata (files stored outside the web root) |
+| `007_supplier_logos.sql` | Logo metadata (files served only through controlled PHP routes) |
 | `008_portal_completion.sql` | Re-asserts encrypted phone sizes, adds `portal_activity_logs` and `ad_daily_stats` |
 | `009_pricing_completion.sql` | Adds `ads.price_model_type`, pricing-rule subscription/service fees, invoice line type/code, drops the ad-level unique index in favour of `line_code` |
 | `010_handover_hardening.sql` | Converts `verification_token` to InnoDB, adds `portal_users.must_change_password` for forced rotation |
@@ -286,7 +287,8 @@ Wall-clock latency and memory for repeated encrypt/decrypt, profile reads, and p
 - Existing plaintext rows still load correctly until the backfill is run, so enabling encryption on an existing DB does not break reads.
 - The admin Security Check page only shows safe metadata; no keys, ciphertext, or decrypted data.
 - The repo does not commit a real encryption key. `app/config/config.local.php` is gitignored.
-- Logo uploads go under `app/storage` (outside the web root). PNG/JPG/WebP, up to 2 MB. File type is validated by both MIME and image-data inspection.
+- Logo uploads go under `app/storage` and are served only through controlled PHP routes. In the fallback XAMPP `htdocs` layout, Apache `.htaccess` files deny direct HTTP access to the raw storage folder. PNG/JPG/WebP, up to 2 MB. File type is validated by both MIME and image-data inspection.
+- Vendored TCPDF lives in `app/vendor/tcpdf`; the current handoff copy is 6.11.2. See `app/vendor/README.md` before updating it.
 - Activity-log writes go to both `error_log` and the `portal_activity_logs` table when the table is reachable. If the table is missing (e.g. before migration 008), the logger silently falls back to `error_log` only.
 - All mutating forms include a CSRF token via `Csrf::input()` and verify it through `Csrf::verifyOrFail()`.
 - Sessions are cookie-based with `HttpOnly` + `SameSite=Strict` set in `SecurityBootstrap.php`. The `secure` flag is set automatically when the portal runs over HTTPS.

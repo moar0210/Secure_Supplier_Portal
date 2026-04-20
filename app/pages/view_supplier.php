@@ -45,7 +45,7 @@
     </p>
 <?php endif; ?>
 
-<form method="post" enctype="multipart/form-data" autocomplete="off" class="form-stack">
+<form method="post" enctype="multipart/form-data" autocomplete="off" class="form-stack supplier-profile-form">
     <?= Csrf::input(); ?>
 
     <div class="field">

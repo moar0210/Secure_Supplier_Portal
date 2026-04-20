@@ -12,9 +12,7 @@ $bootstrap = require __DIR__ . '/bootstrap.php';
 require_once $bootstrap['root'] . '/app/lib/auth.php';
 require_once $bootstrap['root'] . '/app/lib/PortalUserService.php';
 
-/** @var PDO $pdo */
 $pdo = $bootstrap['pdo'];
-/** @var SupplierService $supplierService */
 $supplierService = $bootstrap['supplierService'];
 $sessionDir = $bootstrap['root'] . '/app/storage/cli_sessions';
 if (!is_dir($sessionDir) && !mkdir($sessionDir, 0775, true) && !is_dir($sessionDir)) {
@@ -98,6 +96,20 @@ try {
     assertTrueValue(userPasswordMatches($pdo, (int)$fixture['supplier_user_id'], 'SupplierReset123'), 'successful token reset stores the new password hash', $checks);
     assertSameValue(0, countResetTokensForUsername($pdo, (string)$tokenData['username']), 'password reset tokens are single-use and removed after success', $checks);
 
+    $selfDeactivateBlocked = false;
+    try {
+        $portalUserService->updateUserForSupplier((int)$fixture['supplier_user_id'], (int)$fixture['supplier_id'], [
+            'username' => (string)$supplierUser['username'],
+            'email' => (string)$supplierUser['email'],
+            'password' => '',
+            'confirm_password' => '',
+            'is_active' => '0',
+        ], (int)$fixture['supplier_user_id']);
+    } catch (UserFacingException) {
+        $selfDeactivateBlocked = true;
+    }
+    assertTrueValue($selfDeactivateBlocked, 'supplier users cannot deactivate their own active session account', $checks);
+
     $fixture['admin_user_id'] = $portalUserService->createUserAsAdmin([
         'username' => 'auth_admin_user_' . bin2hex(random_bytes(3)),
         'email' => 'auth_admin_user_' . bin2hex(random_bytes(3)) . '@example.local',
@@ -150,6 +162,18 @@ try {
         'is_active' => '1',
     ], (int)$fixture['self_admin_user_id']);
     assertSameValue(0, fetchMustChangePasswordFlag($pdo, (int)$fixture['self_admin_user_id']), 'self-service password updates do not force another rotation cycle', $checks);
+
+    assertTrueValue(
+        $auth->attemptLogin((string)$supplierUser['username'], 'SupplierReset123'),
+        'supplier fixture can sign in before session invalidation check',
+        $checks
+    );
+    $nextRequestAuth = new Auth($pdo);
+    $pdo->prepare('UPDATE portal_users SET is_active = 0, updated_at = NOW() WHERE id = :id')->execute([
+        ':id' => $fixture['supplier_user_id'],
+    ]);
+    assertSameValue(false, $nextRequestAuth->refreshSessionUser(), 'inactive users are signed out on the next request refresh', $checks);
+    assertSameValue(false, $nextRequestAuth->isLoggedIn(), 'invalidated session no longer reports an authenticated user', $checks);
 
     echo "Auth flow verification completed.\n";
     foreach ($checks as $check) {

@@ -1,49 +1,77 @@
+<?php
+$hour = (int)date('G');
+$greeting = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good evening');
+
+$cards = [
+    [
+        'page' => 'admin_ads_queue',
+        'title' => 'Ads queue',
+        'desc' => 'Approve or reject supplier advertisements and inspect status history.',
+        'cta' => 'Review advertisements',
+    ],
+    [
+        'page' => 'suppliers',
+        'title' => 'Suppliers',
+        'desc' => 'Create suppliers, review profile data, and activate or deactivate accounts.',
+        'cta' => 'Open supplier list',
+    ],
+    [
+        'page' => 'admin_users',
+        'title' => 'Users',
+        'desc' => 'Manage portal users, assign roles, and link users to the correct company.',
+        'cta' => 'Manage users',
+    ],
+    [
+        'page' => 'admin_invoices',
+        'title' => 'Invoices',
+        'desc' => 'Generate monthly drafts, mark invoices as sent, and check overdue balances.',
+        'cta' => 'Open invoicing',
+    ],
+    [
+        'page' => 'admin_pricing_rules',
+        'title' => 'Pricing rules',
+        'desc' => 'Maintain the pricing and VAT rules used by the monthly invoice generator.',
+        'cta' => 'Manage pricing',
+    ],
+    [
+        'page' => 'admin_categories',
+        'title' => 'Categories',
+        'desc' => 'Maintain the advertisement categories visible to suppliers and the shop.',
+        'cta' => 'Open categories',
+    ],
+    [
+        'page' => 'admin_reports',
+        'title' => 'Reports',
+        'desc' => 'Review platform-wide supplier, user, listing, invoice, and visibility statistics.',
+        'cta' => 'Open reports',
+    ],
+    [
+        'page' => 'security_check',
+        'title' => 'Security check',
+        'desc' => 'Verify session behavior, cookie settings, and the encryption configuration.',
+        'cta' => 'Open security check',
+    ],
+];
+?>
 <div class="page-header">
-    <h1>Admin dashboard</h1>
+    <div class="page-header__title-group">
+        <h1><?= h($greeting) ?></h1>
+        <p class="page-header__subtitle">Here's what's happening across your supplier portal today.</p>
+    </div>
+    <div class="page-header__actions">
+        <a href="?page=supplier_create"><button type="button" class="btn-secondary">+ Add supplier</button></a>
+        <a href="?page=admin_invoices"><button type="button">+ Create invoice</button></a>
+    </div>
 </div>
 
-<p class="muted">Manage the portal workflow across supplier profiles, advertisement approvals, invoicing, pricing rules, and security checks.</p>
-
-<div class="card-grid">
-    <div class="card">
-        <h2 class="card__title mt-0">Suppliers</h2>
-        <p class="muted">Create suppliers, review their profile data, and activate or deactivate supplier accounts before billing and approvals.</p>
-        <a href="?page=suppliers">Open supplier list &rarr;</a>
-    </div>
-
-    <div class="card">
-        <h2 class="card__title mt-0">Users</h2>
-        <p class="muted">Manage portal users, assign roles, and link supplier users to the correct company account.</p>
-        <a href="?page=admin_users">Manage users &rarr;</a>
-    </div>
-
-    <div class="card">
-        <h2 class="card__title mt-0">Ads queue</h2>
-        <p class="muted">Approve or reject supplier advertisements and inspect the status history for each listing.</p>
-        <a href="?page=admin_ads_queue">Review advertisements &rarr;</a>
-    </div>
-
-    <div class="card">
-        <h2 class="card__title mt-0">Reports</h2>
-        <p class="muted">Review platform-wide supplier, user, listing, invoice, and visibility statistics with recent activity logs.</p>
-        <a href="?page=admin_reports">Open reports &rarr;</a>
-    </div>
-
-    <div class="card">
-        <h2 class="card__title mt-0">Invoices</h2>
-        <p class="muted">Generate monthly drafts, mark invoices as sent, track payments, and check overdue balances.</p>
-        <a href="?page=admin_invoices">Open invoicing &rarr;</a>
-    </div>
-
-    <div class="card">
-        <h2 class="card__title mt-0">Pricing rules</h2>
-        <p class="muted">Maintain the pricing and VAT rules used by the monthly invoice generation workflow.</p>
-        <a href="?page=admin_pricing_rules">Manage pricing rules &rarr;</a>
-    </div>
-
-    <div class="card">
-        <h2 class="card__title mt-0">Security check</h2>
-        <p class="muted">Verify secure session behavior, cookie settings, and the current encryption configuration.</p>
-        <a href="?page=security_check">Open security check &rarr;</a>
-    </div>
+<div class="card-grid mb-5">
+    <?php foreach ($cards as $card): ?>
+        <div class="stat-card">
+            <div class="stat-card__head">
+                <span class="stat-card__label"><?= h($card['title']) ?></span>
+            </div>
+            <p class="muted small mt-3" style="margin-bottom:14px;"><?= h($card['desc']) ?></p>
+            <a href="?page=<?= h($card['page']) ?>"><?= h($card['cta']) ?> &rarr;</a>
+        </div>
+    <?php endforeach; ?>
 </div>

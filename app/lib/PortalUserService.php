@@ -20,8 +20,11 @@ final class PortalUserService
 
         $search = trim((string)($filters['search'] ?? ''));
         if ($search !== '') {
-            $where[] = '(u.username LIKE :search OR u.email LIKE :search OR s.supplier_name LIKE :search)';
-            $params[':search'] = '%' . $search . '%';
+            $where[] = '(u.username LIKE :search_username OR u.email LIKE :search_email OR s.supplier_name LIKE :search_supplier)';
+            $searchLike = '%' . $search . '%';
+            $params[':search_username'] = $searchLike;
+            $params[':search_email'] = $searchLike;
+            $params[':search_supplier'] = $searchLike;
         }
 
         $role = strtoupper(trim((string)($filters['role'] ?? '')));
@@ -354,6 +357,10 @@ final class PortalUserService
 
         $clean = $this->normalizeInput($input, false, false, $supplierId, $userId);
         $hasMustChangePassword = $this->hasMustChangePasswordColumn();
+
+        if ($actorUserId !== null && $actorUserId === $userId && $clean['is_active'] !== 1) {
+            throw new UserFacingException('You cannot deactivate your own account. Ask another company user or an admin to do it.');
+        }
 
         $this->pdo->beginTransaction();
 

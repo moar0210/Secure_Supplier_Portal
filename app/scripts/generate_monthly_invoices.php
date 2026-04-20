@@ -11,11 +11,8 @@ $bootstrap = require __DIR__ . '/bootstrap.php';
 
 require_once $bootstrap['root'] . '/app/lib/InvoiceService.php';
 
-/** @var PDO $pdo */
 $pdo = $bootstrap['pdo'];
-/** @var Crypto $crypto */
 $crypto = $bootstrap['crypto'];
-/** @var SupplierService $supplierService */
 $supplierService = $bootstrap['supplierService'];
 $config = (array)$bootstrap['config'];
 

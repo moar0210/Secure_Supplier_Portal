@@ -12,6 +12,7 @@ class Auth
     private ?string $lastLoginError = null;
     private bool $mustChangePasswordColumnKnown = false;
     private bool $mustChangePasswordColumnExists = false;
+    private bool $sessionUserChecked = false;
 
     public function __construct(PDO $pdo)
     {
@@ -97,8 +98,6 @@ class Auth
             $this->logAuthEvent('Login blocked by lockout', [
                 'user_id' => (int)$user['id'],
             ]);
-            // Collapse locked/invalid into a single generic error so the
-            // login form does not reveal which accounts exist.
             $this->lastLoginError = 'INVALID';
             return false;
         }
@@ -120,14 +119,7 @@ class Auth
             $this->updatePasswordHash((int)$user['id'], $this->hashPassword($password));
         }
 
-        $rolesStmt = $this->pdo->prepare("
-            SELECT r.name
-            FROM user_roles ur
-            JOIN roles r ON r.id = ur.role_id
-            WHERE ur.user_id = :uid
-        ");
-        $rolesStmt->execute([':uid' => (int)$user['id']]);
-        $roles = $rolesStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $roles = $this->loadRoleNames((int)$user['id']);
 
         session_regenerate_id(true);
 
@@ -142,6 +134,7 @@ class Auth
                 ? ((int)($user['must_change_password'] ?? 0) === 1)
                 : false,
         ];
+        $this->sessionUserChecked = true;
 
         $this->logAuthEvent('Login succeeded', [
             'user_id' => (int)$user['id'],
@@ -153,14 +146,66 @@ class Auth
 
     public function loginErrorMessage(): string
     {
-        // Intentionally generic — do not distinguish unknown user, disabled
-        // account, or lockout, to avoid account enumeration signals.
+        // Keep login errors generic.
         return 'Invalid credentials.';
     }
 
     public function mustChangePassword(): bool
     {
         return $this->isLoggedIn() && !empty($_SESSION['auth']['must_change_password']);
+    }
+
+    public function refreshSessionUser(): bool
+    {
+        $this->ensureSession();
+        if (!$this->isLoggedIn()) {
+            $this->sessionUserChecked = false;
+            return false;
+        }
+
+        if ($this->sessionUserChecked) {
+            return true;
+        }
+
+        $selectCols = "
+            id,
+            username,
+            email,
+            supplier_id,
+            is_active
+        ";
+        if ($this->hasMustChangePasswordColumn()) {
+            $selectCols .= ",\n            must_change_password";
+        }
+
+        $stmt = $this->pdo->prepare("
+            SELECT {$selectCols}
+            FROM portal_users
+            WHERE id = :id
+            LIMIT 1
+        ");
+        $stmt->execute([':id' => (int)$_SESSION['auth']['user_id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user || (int)$user['is_active'] !== 1) {
+            $this->logAuthEvent('Session invalidated by current account state', [
+                'user_id' => (int)($_SESSION['auth']['user_id'] ?? 0),
+            ]);
+            $this->logout();
+            return false;
+        }
+
+        $_SESSION['auth']['user_id'] = (int)$user['id'];
+        $_SESSION['auth']['username'] = (string)$user['username'];
+        $_SESSION['auth']['email'] = (string)$user['email'];
+        $_SESSION['auth']['supplier_id'] = $user['supplier_id'] === null ? null : (int)$user['supplier_id'];
+        $_SESSION['auth']['roles'] = $this->loadRoleNames((int)$user['id']);
+        $_SESSION['auth']['must_change_password'] = $this->hasMustChangePasswordColumn()
+            ? ((int)($user['must_change_password'] ?? 0) === 1)
+            : false;
+
+        $this->sessionUserChecked = true;
+        return true;
     }
 
     public function changePasswordForCurrentUser(string $currentPassword, string $newPassword, string $confirmPassword): void
@@ -298,8 +343,11 @@ class Auth
         $this->ensureSession();
 
         $_SESSION = [];
+        $this->sessionUserChecked = false;
 
-        SecurityBootstrap::expireSessionCookie();
+        if (class_exists('SecurityBootstrap', false)) {
+            SecurityBootstrap::expireSessionCookie();
+        }
 
         session_destroy();
     }
@@ -307,6 +355,11 @@ class Auth
     public function requireLogin(): void
     {
         if (!$this->isLoggedIn()) {
+            header('Location: ?page=login');
+            exit;
+        }
+
+        if (!$this->refreshSessionUser()) {
             header('Location: ?page=login');
             exit;
         }
@@ -450,7 +503,6 @@ class Auth
             return null;
         }
 
-        // Deterministic lookup: email-shaped identifiers resolve by email, everything else by username.
         $field = filter_var($identifier, FILTER_VALIDATE_EMAIL) !== false ? 'email' : 'username';
 
         $sql = "
@@ -469,6 +521,24 @@ class Auth
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         return $row ?: null;
+    }
+
+    private function loadRoleNames(int $userId): array
+    {
+        $rolesStmt = $this->pdo->prepare("
+            SELECT r.name
+            FROM user_roles ur
+            JOIN roles r ON r.id = ur.role_id
+            WHERE ur.user_id = :uid
+            ORDER BY r.name ASC
+        ");
+        $rolesStmt->execute([':uid' => $userId]);
+        $roles = $rolesStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+        return array_values(array_unique(array_map(
+            static fn(string $role): string => strtoupper($role),
+            array_map('strval', $roles)
+        )));
     }
 
     private function getValidResetTokenRow(string $username, string $rawToken): ?array

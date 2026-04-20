@@ -47,7 +47,6 @@ CREATE TABLE IF NOT EXISTS `ad_status_history` (
   CONSTRAINT `fk_ad_status_history_user` FOREIGN KEY (`changed_by_user_id`) REFERENCES `portal_users` (`id`) ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-/* Optional seed categories (safe, won’t duplicate) */
 INSERT IGNORE INTO `ad_categories` (`name`) VALUES
   ('General'),
   ('Products'),

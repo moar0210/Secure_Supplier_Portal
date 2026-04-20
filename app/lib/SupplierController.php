@@ -8,8 +8,26 @@ final class SupplierController extends BaseController
     {
         $this->auth->requireRole('ADMIN');
 
+        $search = trim((string)($_GET['search'] ?? ''));
+        $pageNo = max(1, (int)($_GET['page_no'] ?? 1));
+        $perPage = 50;
+        $total = $this->supplierService->countSuppliers($search);
+        $totalPages = max(1, (int)ceil($total / $perPage));
+        if ($pageNo > $totalPages) {
+            $pageNo = $totalPages;
+        }
+
         $this->render('view_suppliers', [
-            'rows' => $this->supplierService->listSuppliers(),
+            'rows' => $this->supplierService->listSuppliers($perPage, ($pageNo - 1) * $perPage, $search),
+            'filters' => [
+                'search' => $search,
+            ],
+            'pagination' => [
+                'page_no' => $pageNo,
+                'per_page' => $perPage,
+                'total' => $total,
+                'total_pages' => $totalPages,
+            ],
         ], 200, 'Suppliers');
     }
 

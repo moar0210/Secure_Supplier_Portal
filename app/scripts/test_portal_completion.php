@@ -13,11 +13,8 @@ require_once $bootstrap['root'] . '/app/lib/PortalUserService.php';
 require_once $bootstrap['root'] . '/app/lib/StatsService.php';
 require_once $bootstrap['root'] . '/app/lib/InvoiceService.php';
 
-/** @var PDO $pdo */
 $pdo = $bootstrap['pdo'];
-/** @var Crypto $crypto */
 $crypto = $bootstrap['crypto'];
-/** @var SupplierService $supplierService */
 $supplierService = $bootstrap['supplierService'];
 $portalUserService = new PortalUserService($pdo);
 $statsService = new StatsService($pdo);

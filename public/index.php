@@ -77,6 +77,10 @@ $apiController = new ApiController($view, $auth, $db, $crypto, $adsService, $sup
 
 $page = (string)($_GET['page'] ?? 'home');
 
+if ($auth->isLoggedIn() && $page !== 'logout') {
+    $auth->refreshSessionUser();
+}
+
 $routes = [
     'home' => [$staticController, 'home'],
     'dbtest' => [$staticController, 'dbtest'],
@@ -118,8 +122,6 @@ $routes = [
     'api_shop_supplier_logo' => [$apiController, 'shopSupplierLogo'],
 ];
 
-// Force users with must_change_password=1 into the change-password flow
-// before they can do anything else that mutates state.
 $passwordRotationExempt = [
     'change_password',
     'logout',

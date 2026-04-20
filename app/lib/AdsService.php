@@ -24,10 +24,6 @@ final class AdsService
         $this->pdo = $pdo;
     }
 
-    /* =========================================================
-       Supplier-facing operations
-       ========================================================= */
-
     public function listForSupplier(int $supplierId): array
     {
         $stmt = $this->pdo->prepare("
@@ -85,19 +81,6 @@ final class AdsService
         return $row ?: null;
     }
 
-    /**
-     * Create ad (default: DRAFT). You can submit later using submitForSupplier(),
-     * or submit immediately by sending submit_for_approval=1 in $data.
-     *
-     * Expected $data keys:
-     * - title (required)
-     * - description (required)
-     * - category_id (optional)
-     * - price_text (optional)
-     * - valid_from (optional YYYY-MM-DD)
-     * - valid_to (optional YYYY-MM-DD)
-     * - submit_for_approval (optional truthy -> initial status PENDING)
-     */
     public function createForSupplier(int $supplierId, array $data, int $actorUserId): int
     {
         $clean = $this->validateAndNormalizeAdData($data);
@@ -105,7 +88,6 @@ final class AdsService
         $submitNow = $this->shouldSubmit($data);
         $status = $submitNow ? self::STATUS_PENDING : self::STATUS_DRAFT;
 
-        // Only APPROVED ads are allowed to be active
         $isActive = 0;
 
         $this->pdo->beginTransaction();
@@ -140,11 +122,6 @@ final class AdsService
         }
     }
 
-    /**
-     * Submit/resubmit:
-     * - DRAFT -> PENDING
-     * - REJECTED -> PENDING
-     */
     public function submitForSupplier(int $adId, int $supplierId, int $actorUserId): void
     {
         $current = $this->getForSupplier($adId, $supplierId);
@@ -182,13 +159,6 @@ final class AdsService
         }
     }
 
-    /**
-     * Update rules (Part 3):
-     * - PENDING ads are locked (cannot be edited) to keep workflow clear.
-     * - APPROVED edit -> PENDING + is_active=0 (re-review needed).
-     * - REJECTED edit -> DRAFT (clears reason). Can submit after.
-     * - DRAFT edit -> DRAFT (unless submit_for_approval=1, then goes PENDING).
-     */
     public function updateForSupplier(int $adId, int $supplierId, array $data, int $actorUserId): void
     {
         $current = $this->getForSupplier($adId, $supplierId);
@@ -198,7 +168,6 @@ final class AdsService
 
         $oldStatus = (string)$current['status'];
 
-        // Lock pending ads for clarity + auditability
         if ($oldStatus === self::STATUS_PENDING) {
             throw new UserFacingException('Pending ads cannot be edited. Wait for review.');
         }
@@ -217,7 +186,7 @@ final class AdsService
         } elseif ($oldStatus === self::STATUS_REJECTED) {
             $newStatus = $submitNow ? self::STATUS_PENDING : self::STATUS_DRAFT;
             $newRejectReason = null;
-            $forceInactive = true; // safe default: keep inactive until re-approved
+            $forceInactive = true;
         } elseif ($oldStatus === self::STATUS_DRAFT) {
             $newStatus = $submitNow ? self::STATUS_PENDING : self::STATUS_DRAFT;
             if ($newStatus === self::STATUS_PENDING) {
@@ -291,9 +260,6 @@ final class AdsService
         }
     }
 
-    /**
-     * Supplier can only activate/deactivate APPROVED ads.
-     */
     public function toggleActiveForSupplier(int $adId, int $supplierId, bool $active, ?int $actorUserId = null): void
     {
         $current = $this->getForSupplier($adId, $supplierId);
@@ -363,10 +329,6 @@ final class AdsService
             throw new RuntimeException('Unable to delete the advertisement.');
         }
     }
-
-    /* =========================================================
-       Admin-facing operations
-       ========================================================= */
 
     public function adminQueue(?string $status = self::STATUS_PENDING): array
     {
@@ -440,11 +402,6 @@ final class AdsService
         return $row ?: null;
     }
 
-    /**
-     * Admin approves/rejects ONLY PENDING.
-     * - approve => APPROVED + is_active=0 + rejection_reason=NULL
-     * - reject  => REJECTED + is_active=0 + rejection_reason=required
-     */
     public function adminDecision(int $adId, bool $approve, ?string $reason, int $actorUserId): void
     {
         $current = $this->adminGet($adId);
@@ -464,7 +421,7 @@ final class AdsService
             throw new UserFacingException('Rejection reason is required.');
         }
 
-        // Approval and activation are separate steps: supplier decides when an approved ad goes live.
+        // Approved ads still need the supplier to turn them on.
         $isActive = 0;
 
         $this->pdo->beginTransaction();
@@ -479,7 +436,7 @@ final class AdsService
             ");
             $stmt->execute([
                 ':st' => $newStatus,
-                ':rr' => $reasonNorm,   // NULL on approve
+                ':rr' => $reasonNorm,
                 ':ia' => $isActive,
                 ':id' => $adId,
             ]);
@@ -510,10 +467,6 @@ final class AdsService
         $stmt->execute([':aid' => $adId]);
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
-
-    /* =========================================================
-       Categories
-       ========================================================= */
 
     public function listCategories(): array
     {
@@ -584,15 +537,8 @@ final class AdsService
         $stmt->execute([':id' => $categoryId]);
     }
 
-    /* =========================================================
-       Internals
-       ========================================================= */
-
     private function shouldSubmit(array $data): bool
     {
-        // Supports multiple UI styles:
-        // - <button name="action" value="submit">
-        // - hidden input submit_for_approval=1
         $action = strtolower(trim((string)($data['action'] ?? '')));
         if ($action === 'submit') {
             return true;
@@ -643,7 +589,6 @@ final class AdsService
             $price = null;
         }
 
-        // Avoid FK exceptions: verify category exists when provided
         $this->assertCategoryExists($categoryId);
 
         $validFrom = $this->normalizeDate($data['valid_from'] ?? null);

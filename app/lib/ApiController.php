@@ -215,8 +215,6 @@ final class ApiController extends BaseController
 
     private function resolveCorsOrigin(string $requestOrigin, array $allowed): ?string
     {
-        // Empty allowlist denies cross-origin requests. Only an explicit ["*"]
-        // entry opens the endpoint to any origin.
         if ($allowed === []) {
             return null;
         }

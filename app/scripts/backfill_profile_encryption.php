@@ -9,7 +9,6 @@ if (PHP_SAPI !== 'cli') {
 
 try {
     $bootstrap = require __DIR__ . '/bootstrap.php';
-    /** @var ProfileEncryptionBackfill $backfill */
     $backfill = $bootstrap['backfill'];
     $summary = $backfill->run();
 

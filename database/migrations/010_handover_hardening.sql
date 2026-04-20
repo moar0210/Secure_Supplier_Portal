@@ -1,14 +1,5 @@
--- 010_handover_hardening.sql
--- Final hardening pass:
---   * Convert verification_token from Aria to InnoDB so it participates in
---     transactions and can carry an FK to portal_users.
---   * Add portal_users.must_change_password for the forced rotation flow.
-
 SET FOREIGN_KEY_CHECKS = 0;
 
--- Some legacy environments created verification_token as Aria with Aria-only
--- table options, which makes a straight ALTER ... ENGINE=InnoDB fail. Rebuild
--- the table explicitly instead of relying on engine conversion in place.
 DROP TABLE IF EXISTS `verification_token_innodb`;
 
 CREATE TABLE `verification_token_innodb` (

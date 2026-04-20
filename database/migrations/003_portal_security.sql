@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS `verification_token` (
   `token` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id_verification_token`),
   UNIQUE KEY `uk_verification_token_username` (`username`)
-) ENGINE=Aria DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ALTER TABLE `verification_token`
   MODIFY `username` varchar(50) NOT NULL;

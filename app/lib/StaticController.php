@@ -6,7 +6,13 @@ final class StaticController extends BaseController
 {
     public function home(): void
     {
-        $this->render('view_home');
+        $isLoggedIn = $this->auth->isLoggedIn();
+
+        $this->render('view_home', [
+            'isLoggedIn' => $isLoggedIn,
+            'isSupplier' => $isLoggedIn && $this->auth->hasRole('SUPPLIER'),
+            'supplierId' => $isLoggedIn ? $this->auth->supplierId() : null,
+        ]);
     }
 
     public function dbtest(): void

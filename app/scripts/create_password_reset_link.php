@@ -17,7 +17,6 @@ $bootstrap = require __DIR__ . '/bootstrap.php';
 
 require_once $bootstrap['root'] . '/app/lib/auth.php';
 
-/** @var PDO $pdo */
 $pdo = $bootstrap['pdo'];
 $config = (array)$bootstrap['config'];
 $sessionDir = $bootstrap['root'] . '/app/storage/cli_sessions';

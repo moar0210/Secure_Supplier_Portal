@@ -34,7 +34,7 @@ $statusClass = match (strtoupper($status)) {
     </div>
 <?php endif; ?>
 
-<form method="post" autocomplete="off" class="form-stack">
+<form method="post" autocomplete="off" class="form-stack ad-form">
     <?= Csrf::input(); ?>
 
     <div class="field">

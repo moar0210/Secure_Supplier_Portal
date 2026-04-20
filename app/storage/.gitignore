@@ -1,5 +1,7 @@
 *
 !.gitignore
+!.htaccess
 !supplier_logos/
 supplier_logos/*
 !supplier_logos/.gitignore
+!supplier_logos/.htaccess

@@ -29,7 +29,7 @@
         return '<span class="badge ' . $cls . '">' . h($status) . '</span>';
     };
     ?>
-    <table>
+    <table class="ads-queue-table">
         <thead>
             <tr>
                 <th>ID</th>
