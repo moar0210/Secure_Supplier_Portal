@@ -1,6 +1,5 @@
 # Local secrets
 app/config/config.local.php
-docs/
 app/storage/cli_sessions/
 app/storage/shop_track/
 tmp/sessions/
