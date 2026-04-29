@@ -27,7 +27,6 @@ database/
 public/
   index.php      single entry point, routes by ?page=...
   portal.js      small JS helper
-docs/            project specs (not source)
 ```
 
 ## Setup
