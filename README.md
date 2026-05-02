@@ -256,6 +256,12 @@ C:\xampp\php\php.exe app\scripts\test_auth_flows.php
 ```
 Requires migration 010 (`portal_users.must_change_password` column). Covers: new users must rotate their initial password, token-based reset clears the forced-rotation flag, admin-issued password changes re-flag the target user, self-service changes do not trigger another forced rotation.
 
+Security attempts (access control, injection handling, CSRF, lockout, safe errors):
+```powershell
+C:\xampp\php\php.exe app\scripts\test_security_attempts.php
+```
+Requires Apache/localhost because it exercises the real HTTP routes. Covers supplier access denial for admin routes, object-level invoice isolation, SQL-style login/search payload handling, missing/wrong CSRF rejection, login lockout after repeated failures, and error responses without stack traces or filesystem paths.
+
 ### Benchmark
 
 ```powershell
