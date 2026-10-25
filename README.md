@@ -1,6 +1,10 @@
 # Supplier Portal (Thesis 2026)
 
-A small PHP/MariaDB supplier portal that runs on a local LAMP stack. Built on XAMPP/Windows for development, targeted at Raspberry Pi for deployment. It handles supplier login, company profile with logo upload, ad CRUD with admin approval, monthly invoicing with PDF export, payment tracking, and per-supplier stats. Sensitive profile fields are encrypted at rest with libsodium.
+A PHP/MariaDB supplier portal that I developed independently for HEDVC AB as my bachelor's thesis (January-May 2026). HEDVC AB subsequently deployed the portal and integrated it with its website.
+
+The portal handles supplier login, company profiles with logo uploads, advertisement management with admin approval, monthly invoicing with PDF export, payment tracking, and per-supplier statistics. Sensitive profile fields are encrypted at rest with libsodium.
+
+Local development used XAMPP on Windows. The setup instructions below reproduce the thesis application locally.
 
 No framework. Routing is a single `public/index.php` that dispatches on `?page=`. Controllers and services sit under `app/lib`, views are plain PHP in `app/pages`, and all DB access goes through PDO with prepared statements.
 
@@ -88,7 +92,7 @@ Suppliers never see other suppliers' data. Access checks run in the controllers 
 
 ### Consumer-facing catalogue
 
-The portal does not render ads to end consumers. That's the `hedvc.com` shop team's job. The spec mentions this only once: "This portal will be developed as a web application using PHP and MariaDB, which will be later connected in the site www.hedvc.com." Rendering approved ads for visitors lives in the shop frontend, not here.
+HEDVC AB integrated the portal with its website after the thesis. Rendering approved advertisements to visitors is handled by the external shop frontend. This repository contains the management portal and its JSON API; it does not contain the consumer-facing shop frontend.
 
 What this portal does is the management side: supplier CRUD, the ad workflow (draft → pending → approved/rejected), pricing rules, invoicing, and statistics. Consumer traffic reads the data read-only through the JSON API below.
 
